@@ -4,10 +4,17 @@ Project-specific. Global rules in `~/.claude/rules/` still apply.
 
 ## Branches & PRs
 
-- `main` is protected. No direct pushes. Every change goes through a PR.
-- Branch name: `<type>/<slug>` (`feat/...`, `fix/...`, `docs/...`).
-- Squash-merge PR title = the commit on `main` → it must be a valid Conventional Commit.
-- All `ci.yml` jobs (rust, frontend, installer) must pass before merge.
+- This fork (`HarrisonW/spark-dashboard`) permits direct pushes to `main`
+  by the maintainer — Claude may commit and push without opening a PR
+  when working solo. PRs are still the right tool for collaborative
+  changes and for contributing back to upstream (`niklasfrick/spark-dashboard`).
+- Branch name (when a PR is used): `<type>/<slug>`
+  (`feat/...`, `fix/...`, `docs/...`).
+- Each commit landing on `main` (direct or via squash-merge) must be a
+  valid Conventional Commit — `release-please` reads them to decide
+  version bumps.
+- `ci.yml` (rust, frontend, installer) should still be green before a
+  release tag goes out.
 
 ## Commits drive releases
 
