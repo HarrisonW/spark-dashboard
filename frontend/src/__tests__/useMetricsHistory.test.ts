@@ -44,10 +44,10 @@ describe('useMetricsHistory persistence', () => {
     expect(result.current.getChartData('cpuAggregate')).toEqual(points)
   })
 
-  it('drops persisted points older than the 5-minute window on restore', () => {
+  it('drops persisted points older than the retention window on restore', () => {
     const now = Date.now()
-    const fresh = makePoints(now, [60, 10], 100) // within window
-    const stale = makePoints(now, [3600, 1800], 200) // way outside
+    const fresh = makePoints(now, [60, 10], 100) // within retention
+    const stale = makePoints(now, [3600, 1800], 200) // way outside 10-min retention
     window.sessionStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -101,7 +101,7 @@ describe('useMetricsHistory persistence', () => {
     )
 
     // getEvents / getRequests filter by lastTimestampRef. After restore that ref is
-    // the latest restored timestamp (the event), which keeps both items in the 5-min window.
+    // the latest restored timestamp (the event), which keeps both items in the display window.
     const { result } = renderHook(() => useMetricsHistory(null))
     expect(result.current.getEvents()).toEqual([event])
     expect(result.current.getRequests()).toEqual([request])

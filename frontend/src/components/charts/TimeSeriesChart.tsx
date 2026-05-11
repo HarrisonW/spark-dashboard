@@ -66,7 +66,8 @@ function eventStrokeColor(type: string): string {
 
 // Pad data to a fixed number of points so the SVG path always has the same
 // number of commands, enabling smooth CSS `d` transitions between frames.
-const CHART_POINTS = 60
+// 300 ≈ 5 minutes at 1 Hz, matching DEFAULT_WINDOW_SECONDS in useMetricsHistory.
+const CHART_POINTS = 300
 
 function padData(data: DataPoint[]): DataPoint[] {
   if (data.length === 0) return []

@@ -7,11 +7,16 @@ interface DataPoint {
   value: number
 }
 
-const BUFFER_CAPACITY = 900 // 15 minutes at 1 sample/sec
+const BUFFER_CAPACITY = 900 // 15 minutes at 1 sample/sec — room above retention
 const EVENT_BUFFER_CAPACITY = 100
 const REQUEST_BUFFER_CAPACITY = 50
 
-const DEFAULT_WINDOW_SECONDS = 300 // 5 minutes
+// Retain 10 minutes in the in-memory + sessionStorage buffer but only render
+// the last 5 minutes in charts. The extra headroom lets the visible window
+// stay full immediately after a tab refresh and gives room for future longer
+// views without changing the persistence path.
+const BUFFER_WINDOW_SECONDS = 600 // 10 minutes — persistence/hydration retention
+const DEFAULT_WINDOW_SECONDS = 300 // 5 minutes — chart/event/request display
 const STORAGE_KEY = 'spark-dashboard:history:v1'
 const WRITE_INTERVAL_MS = 5000
 
@@ -295,7 +300,7 @@ function hydrateState(stored: StoredPayload, cutoffMs: number): { state: History
 function initHistoryState(): { state: HistoryState; lastTimestamp: number } {
   const stored = readStoredPayload()
   if (!stored) return { state: createEmptyState(), lastTimestamp: 0 }
-  const cutoff = Date.now() - DEFAULT_WINDOW_SECONDS * 1000
+  const cutoff = Date.now() - BUFFER_WINDOW_SECONDS * 1000
   const { state, latestTimestamp } = hydrateState(stored, cutoff)
   return { state, lastTimestamp: latestTimestamp }
 }
@@ -333,7 +338,7 @@ function writeStoredPayload(state: HistoryState, lastTimestamp: number): void {
   // Use the server clock when we have it (avoids clock-skew artifacts);
   // fall back to wall clock for the very first write before any data lands.
   const reference = lastTimestamp || Date.now()
-  const cutoff = reference - DEFAULT_WINDOW_SECONDS * 1000
+  const cutoff = reference - BUFFER_WINDOW_SECONDS * 1000
   const payload = serializeState(state, cutoff)
   try {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
