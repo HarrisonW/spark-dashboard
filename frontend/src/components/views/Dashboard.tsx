@@ -19,7 +19,7 @@ interface DashboardProps {
 
 function HwCard({ title, subtitle, children }: { title?: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-[#111115] rounded-md sm:rounded-lg border border-white/[0.04] px-1.5 pt-1 pb-0.5 lg:px-2 lg:pt-1.5 lg:pb-1 2xl:px-2.5 2xl:pt-2 2xl:pb-1.5 flex flex-col min-h-0 min-w-0 overflow-hidden transition-colors duration-200 hover:border-[#76B900]/10">
+    <div className="bg-[#111115] rounded-md sm:rounded-lg border border-white/[0.04] px-1.5 pt-1 pb-1 lg:px-2 lg:pt-1.5 lg:pb-1 2xl:px-2.5 2xl:pt-2 2xl:pb-1.5 flex flex-col min-h-[88px] sm:min-h-[96px] lg:min-h-0 min-w-0 overflow-hidden transition-colors duration-200 hover:border-[#76B900]/10">
       {(title || subtitle) && (
         <div className="mb-0.5 2xl:mb-1 flex items-baseline gap-1.5 min-w-0 shrink-0">
           {title && <span className="text-[10px] lg:text-[11px] 2xl:text-xs min-[1920px]:text-sm font-semibold text-zinc-200 tracking-tight shrink-0">{title}</span>}
@@ -35,8 +35,10 @@ function HwCard({ title, subtitle, children }: { title?: string; subtitle?: stri
 /** Shared responsive height for hardware mini-charts and gauges.
  *  Aggressive lower bounds keep the heatmap and memory split visible on
  *  cramped screens (13" laptops); upper bounds let big monitors breathe.
+ *  The 56px floor keeps gauges legible on phones and half-screen tablets
+ *  where the viewport is too narrow for 5vw to render a usable dial.
  *  Chart height tracks the gauge so the two sit flush in each card. */
-const HW_GAUGE_PX = 'clamp(36px, 5vw, 96px)'
+const HW_GAUGE_PX = 'clamp(56px, 5vw, 96px)'
 const HW_CHART_HEIGHT = HW_GAUGE_PX
 
 /** Upper end of the DGX Spark Blackwell graphics clock; used to scale the
@@ -107,10 +109,10 @@ export function Dashboard({
   const NET_TX_COLOR = '#A855F7'
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-2">
-      {/* ── Hardware Overview — fills the rest of the viewport ── */}
-      <div className="flex-1 min-h-0 bg-[#0a0a0d]/80 rounded-xl border border-white/[0.03] p-1 lg:p-1.5 2xl:p-2 flex flex-col">
-        <div className="flex-1 min-h-0 grid grid-cols-2 sm:grid-cols-4 gap-1 lg:gap-1.5 auto-rows-fr">
+    <div className="flex flex-col lg:flex-1 lg:min-h-0 gap-2">
+      {/* ── Hardware Overview — fills the viewport at lg+, flows naturally below ── */}
+      <div className="lg:flex-1 lg:min-h-0 bg-[#0a0a0d]/80 rounded-xl border border-white/[0.03] p-1 lg:p-1.5 2xl:p-2 flex flex-col">
+        <div className="lg:flex-1 lg:min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1 lg:gap-1.5 lg:auto-rows-fr">
 
           {/* GPU Utilization */}
           <HwCard title="GPU Utilization" subtitle={metrics.gpu.name ?? undefined}>

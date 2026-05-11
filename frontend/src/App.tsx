@@ -33,22 +33,21 @@ function App() {
   )
 
   return (
-    <div className="h-dvh flex flex-col bg-[#08080a] overflow-hidden relative">
-      {/* Header is absolutely positioned and slides in on hover over the top
-       *  edge of the viewport, so the dashboard can use the full height. The
-       *  wrapper height is just the trigger strip (24px) when hidden, then
-       *  expands to fit the header so the mouse can move into it. */}
+    <div className="min-h-dvh lg:h-dvh flex flex-col bg-[#08080a] lg:overflow-hidden relative">
+      {/* On lg+ the header floats over the dashboard and only slides in on hover,
+       *  giving the metrics grid the full viewport height. Below lg (tablet /
+       *  half-screen / mobile) hover is unreliable or impossible, so the header
+       *  sits inline in normal flow and is always visible. */}
       <div
-        className="absolute top-0 left-0 right-0 z-50 overflow-hidden"
-        style={{ height: showHeader ? 'auto' : '24px' }}
+        className={`lg:absolute lg:top-0 lg:left-0 lg:right-0 lg:z-50 lg:overflow-hidden ${showHeader ? '' : 'lg:h-6'}`}
         onMouseEnter={() => setShowHeader(true)}
         onMouseLeave={() => setShowHeader(false)}
         aria-label="Reveal header"
       >
         <header
-          className={`border-b border-white/[0.04] bg-[#08080a]/95 backdrop-blur px-4 py-1.5 flex justify-between items-center transition-transform duration-200 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}
+          className={`border-b border-white/[0.04] bg-[#08080a]/95 backdrop-blur px-4 py-1.5 flex justify-between items-center gap-3 transition-transform duration-200 ${showHeader ? 'translate-y-0' : 'lg:-translate-y-full'}`}
         >
-          <h1 className="text-xl font-semibold text-zinc-100 tracking-tight" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <h1 className="text-lg sm:text-xl font-semibold text-zinc-100 tracking-tight truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
             <span className="text-[#76B900]">Spark</span>{' '}
             <span className="text-zinc-500 font-normal">Dashboard</span>
           </h1>
@@ -56,7 +55,7 @@ function App() {
         </header>
       </div>
 
-      <main className={`flex-1 min-h-0 flex flex-col p-3 lg:p-4 2xl:p-5 min-[1920px]:p-6 ${isStale ? 'opacity-50' : ''}`}>
+      <main className={`flex-1 lg:min-h-0 flex flex-col p-2 sm:p-3 lg:p-4 2xl:p-5 min-[1920px]:p-6 ${isStale ? 'opacity-50' : ''}`}>
         {!metrics && connectionStatus !== 'connected' && (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">

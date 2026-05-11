@@ -298,10 +298,10 @@ export function EngineSection({
       onValueChange={(v) => handleTabChange(v as string)}
     >
       <Card size="sm" className="bg-[#0d0d10] border-white/[0.04] overflow-hidden">
-        <CardHeader className="flex flex-row justify-between items-center gap-4 min-w-0 shrink-0">
-          <div className="shrink-0 flex items-center gap-4 min-w-0">
+        <CardHeader className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-4 min-w-0 shrink-0">
+          <div className="shrink-0 flex items-center gap-3 md:gap-4 min-w-0">
             {headerProviderLogo && (
-              <div className="shrink-0 h-14 w-14 rounded-xl bg-white p-2 flex items-center justify-center ring-1 ring-white/[0.06]">
+              <div className="shrink-0 h-10 w-10 md:h-14 md:w-14 rounded-xl bg-white p-2 flex items-center justify-center ring-1 ring-white/[0.06]">
                 <img
                   src={headerProviderLogo.url}
                   alt={headerProviderLogo.alt}
@@ -314,7 +314,7 @@ export function EngineSection({
               </div>
             )}
             <div className="min-w-0">
-              <CardTitle className="text-2xl font-bold text-zinc-100 tracking-tight truncate" title={headerTitle}>
+              <CardTitle className="text-lg sm:text-xl md:text-2xl font-bold text-zinc-100 tracking-tight truncate" title={headerTitle}>
                 {headerTitle}
               </CardTitle>
               {isGlobal ? (
@@ -358,7 +358,7 @@ export function EngineSection({
               ) : null}
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
+          <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 justify-start md:justify-end flex-wrap md:flex-nowrap">
             <TabsList
               variant="line"
               className="bg-transparent min-w-0 flex-nowrap gap-2 !h-auto overflow-x-auto overflow-y-visible py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
