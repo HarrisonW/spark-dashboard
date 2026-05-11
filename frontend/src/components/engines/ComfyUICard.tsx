@@ -78,23 +78,33 @@ function StatusDot({ status }: { status: 'connected' | 'connecting' | 'disconnec
 function ProgressBar({
   pct,
   label,
+  indeterminate,
 }: {
   pct: number
   label?: string
+  /** Render an animated sliding stripe instead of a fixed-width fill —
+   *  used while a prompt is running but no live `progress` event has
+   *  arrived yet (or `totalNodes` is unknown). */
+  indeterminate?: boolean
 }) {
   return (
     <div
       className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden"
       role="progressbar"
-      aria-valuenow={Math.round(pct)}
+      aria-valuenow={indeterminate ? undefined : Math.round(pct)}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
+      aria-busy={indeterminate ? true : undefined}
     >
-      <div
-        className="h-full bg-[#76B900] transition-[width] duration-150 ease-linear"
-        style={{ width: `${pct}%` }}
-      />
+      {indeterminate ? (
+        <div className="h-full rounded-full bg-[#76B900]/70 comfy-indeterminate-bar" />
+      ) : (
+        <div
+          className="h-full bg-[#76B900] transition-[width] duration-150 ease-linear"
+          style={{ width: `${pct}%` }}
+        />
+      )}
     </div>
   )
 }
@@ -308,31 +318,38 @@ export function ComfyUICard({ state }: ComfyUICardProps) {
             <div className="flex flex-col gap-2">
               {running.slice(0, 2).map((r) => {
                 const live = progress && progress.promptId === r.promptId ? progress : null
-                const pct = live ? workflowPct(live) : 0
+                // Determinate progress requires both a workflow size and a
+                // live event; otherwise fall back to an animated stripe so
+                // there's always a visible bar in Now Running.
+                const determinate = live !== null && live.totalNodes > 0
+                const pct = determinate ? workflowPct(live!) : 0
                 return (
                   <div key={r.promptId} className="flex flex-col gap-1 min-w-0">
                     <PromptRow prompt={r} running nowMs={nowMs} />
-                    {live ? (
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
-                          <span className="truncate">
-                            Node {live.executedNodes}/{live.totalNodes}
-                            {live.nodeId ? ` · #${live.nodeId}` : ''}
-                          </span>
-                          <span className="tabular-nums">
-                            {live.max > 0 ? `${live.value}/${live.max}` : ''}
-                          </span>
-                        </div>
-                        <ProgressBar pct={pct} label="workflow progress" />
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                        <span className="truncate">
+                          {live && live.totalNodes > 0
+                            ? `Node ${live.executedNodes}/${live.totalNodes}${
+                                live.nodeId ? ` · #${live.nodeId}` : ''
+                              }`
+                            : 'awaiting progress update'}
+                        </span>
+                        <span className="tabular-nums">
+                          {live && live.max > 0 ? `${live.value}/${live.max}` : ''}
+                        </span>
+                      </div>
+                      <ProgressBar
+                        pct={pct}
+                        label="workflow progress"
+                        indeterminate={!determinate}
+                      />
+                      {determinate && (
                         <div className="text-[10px] text-zinc-600 font-mono tabular-nums text-right">
                           {Math.round(pct)}%
                         </div>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-zinc-600 italic font-mono">
-                        awaiting progress update
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )
               })}

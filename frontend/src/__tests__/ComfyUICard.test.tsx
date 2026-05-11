@@ -87,6 +87,32 @@ describe('ComfyUICard', () => {
     expect(screen.getByText('No completed jobs yet.')).toBeDefined()
   })
 
+  it('renders an indeterminate progress bar when running with no live progress yet', () => {
+    const state: ComfyUIState = {
+      ...BASE,
+      queueRemaining: 1,
+      running: [
+        {
+          number: 50,
+          promptId: 'pending-progress',
+          nodeCount: 7,
+          outputNodeCount: 1,
+          primaryNodeTypes: ['KSampler'],
+          modelName: null,
+          queuedAtMs: Date.now() - 5_000,
+          startedAtMs: Date.now() - 2_000,
+        },
+      ],
+      progress: null,
+    }
+    render(<ComfyUICard state={state} />)
+    const bar = screen.getByRole('progressbar')
+    expect(bar.getAttribute('aria-busy')).toBe('true')
+    // Indeterminate bars don't expose a value.
+    expect(bar.getAttribute('aria-valuenow')).toBeNull()
+    expect(screen.getByText(/awaiting progress update/)).toBeDefined()
+  })
+
   it('renders a running prompt with a workflow progress bar when WS progress is present', () => {
     const state: ComfyUIState = {
       ...BASE,
