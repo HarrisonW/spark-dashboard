@@ -34,9 +34,10 @@ function HwCard({ title, subtitle, children }: { title?: string; subtitle?: stri
 
 /** Shared responsive height for hardware mini-charts and gauges.
  *  Aggressive lower bounds keep the heatmap and memory split visible on
- *  cramped screens (13" laptops); upper bounds let big monitors breathe. */
-const HW_CHART_HEIGHT = 'clamp(28px, 7vh, 140px)'
+ *  cramped screens (13" laptops); upper bounds let big monitors breathe.
+ *  Chart height tracks the gauge so the two sit flush in each card. */
 const HW_GAUGE_PX = 'clamp(36px, 5vw, 96px)'
+const HW_CHART_HEIGHT = HW_GAUGE_PX
 
 export function Dashboard({
   metrics,
