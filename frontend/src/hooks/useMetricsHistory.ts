@@ -22,6 +22,9 @@ type MetricKey =
   | 'gpuClockGraphics'
   | 'cpuAggregate'
   | 'memoryUsedPercent'
+  | 'memoryGpuPercent'
+  | 'memoryCpuPercent'
+  | 'memoryFreePercent'
   | 'diskRead'
   | 'diskWrite'
   | 'networkRx'
@@ -34,6 +37,9 @@ const SYSTEM_METRIC_KEYS: MetricKey[] = [
   'gpuClockGraphics',
   'cpuAggregate',
   'memoryUsedPercent',
+  'memoryGpuPercent',
+  'memoryCpuPercent',
+  'memoryFreePercent',
   'diskRead',
   'diskWrite',
   'networkRx',
@@ -84,6 +90,21 @@ function extractValue(metrics: MetricsSnapshot, key: MetricKey): number | null {
     case 'memoryUsedPercent':
       return metrics.memory.total_bytes > 0
         ? (metrics.memory.used_bytes / metrics.memory.total_bytes) * 100
+        : null
+    case 'memoryGpuPercent':
+      return metrics.memory.total_bytes > 0
+        ? ((metrics.memory.gpu_estimated_bytes ?? 0) / metrics.memory.total_bytes) * 100
+        : null
+    case 'memoryCpuPercent': {
+      const total = metrics.memory.total_bytes
+      if (total <= 0) return null
+      const gpu = metrics.memory.gpu_estimated_bytes ?? 0
+      const cpu = Math.max(0, metrics.memory.used_bytes - gpu)
+      return (cpu / total) * 100
+    }
+    case 'memoryFreePercent':
+      return metrics.memory.total_bytes > 0
+        ? (metrics.memory.available_bytes / metrics.memory.total_bytes) * 100
         : null
     case 'diskRead':
       return metrics.disk.read_bytes_per_sec

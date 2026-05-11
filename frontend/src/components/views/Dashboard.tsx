@@ -50,21 +50,22 @@ export function Dashboard({
     ? (metrics.gpu.power_watts / metrics.gpu.power_limit_watts) * 100
     : 0
 
-  const memUsedPercent = metrics.memory.total_bytes > 0
-    ? (metrics.memory.used_bytes / metrics.memory.total_bytes) * 100
-    : 0
-
   const gpuUsed = metrics.memory.gpu_estimated_bytes ?? 0
   const cpuUsed = Math.max(0, metrics.memory.used_bytes - gpuUsed)
-  const cached = Math.min(metrics.memory.cached_bytes, metrics.memory.available_bytes)
-  const free = Math.max(0, metrics.memory.available_bytes - cached)
+  const freeAndCached = metrics.memory.available_bytes
+  const memTotal = metrics.memory.total_bytes
   const totalGB = formatGiB(metrics.memory.display_total_bytes ?? metrics.memory.total_bytes)
 
+  // Memory tile colours — shared by the segmented dial and the multi-series
+  // chart so the legend on the chart reads against both visuals.
+  const MEM_GPU_COLOR = '#76B900'
+  const MEM_CPU_COLOR = '#3B82F6'
+  const MEM_FREE_COLOR = '#71717A'
+
   const memorySegments: GaugeSegment[] = [
-    { value: gpuUsed, total: metrics.memory.total_bytes, color: '#76B900', label: `GPU: ${formatBytes(gpuUsed)}` },
-    { value: cpuUsed, total: metrics.memory.total_bytes, color: '#3B82F6', label: `CPU: ${formatBytes(cpuUsed)}` },
-    { value: cached, total: metrics.memory.total_bytes, color: '#71717A', label: `Cache: ${formatBytes(cached)}` },
-    { value: free, total: metrics.memory.total_bytes, color: '#27272A', label: `Free: ${formatBytes(free)}` },
+    { value: gpuUsed, total: memTotal, color: MEM_GPU_COLOR, label: 'GPU' },
+    { value: cpuUsed, total: memTotal, color: MEM_CPU_COLOR, label: 'CPU' },
+    { value: freeAndCached, total: memTotal, color: MEM_FREE_COLOR, label: 'Free' },
   ]
 
   const allEvents = events.map(e => ({
@@ -168,8 +169,26 @@ export function Dashboard({
 
           {/* Memory */}
           <HwCard title="Memory" subtitle={`${totalGB} Unified`}>
-            <div className="flex items-center justify-center min-h-0 flex-1 overflow-hidden">
-              <ArcGauge value={memUsedPercent} label="" unit="%" segments={memorySegments} size={HW_GAUGE_PX} />
+            <div className="flex items-center gap-2 min-w-0 min-h-0 flex-1 overflow-hidden">
+              <ArcGauge
+                label="Memory"
+                unit="%"
+                segments={memorySegments}
+                size={HW_GAUGE_PX}
+                hideSegmentLegend
+              />
+              <div className="flex-1 min-w-0">
+                <TimeSeriesChart
+                  series={[
+                    { data: history.getChartData('memoryGpuPercent'), label: `GPU ${formatBytes(gpuUsed)}`, color: MEM_GPU_COLOR },
+                    { data: history.getChartData('memoryCpuPercent'), label: `CPU ${formatBytes(cpuUsed)}`, color: MEM_CPU_COLOR },
+                    { data: history.getChartData('memoryFreePercent'), label: `Free ${formatBytes(freeAndCached)}`, color: MEM_FREE_COLOR },
+                  ]}
+                  yDomain={[0, 100]}
+                  unit="%"
+                  height={HW_CHART_HEIGHT}
+                />
+              </div>
             </div>
           </HwCard>
 

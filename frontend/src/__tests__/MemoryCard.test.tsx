@@ -84,6 +84,29 @@ describe('MemoryCard', () => {
     expect(screen.getByText('GPU memory estimation unavailable')).toBeTruthy()
   })
 
+  describe('time-series chart', () => {
+    const chartData = [
+      { timestamp: 1, value: 40 },
+      { timestamp: 2, value: 45 },
+      { timestamp: 3, value: 50 },
+    ]
+
+    it('renders the Memory Usage chart when showCharts is true and chartData is provided', () => {
+      render(<MemoryCard metrics={mockMemoryMetrics} showCharts={true} chartData={chartData} />)
+      expect(screen.getByText('Memory Usage')).toBeTruthy()
+    })
+
+    it('does not render a Memory Usage chart when showCharts is omitted', () => {
+      render(<MemoryCard metrics={mockMemoryMetrics} />)
+      expect(screen.queryByText('Memory Usage')).toBeNull()
+    })
+
+    it('does not render the chart when showCharts is true but chartData is missing', () => {
+      render(<MemoryCard metrics={mockMemoryMetrics} showCharts={true} />)
+      expect(screen.queryByText('Memory Usage')).toBeNull()
+    })
+  })
+
   describe('discrete GPU (is_unified=false)', () => {
     it('renders system RAM and a separate GPU VRAM section', () => {
       render(<MemoryCard metrics={discreteGpuMetrics} />)

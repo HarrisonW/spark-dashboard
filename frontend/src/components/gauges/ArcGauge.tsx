@@ -20,6 +20,9 @@ interface ArcGaugeProps {
   displayValue?: number
   /** When provided, renders a multi-segment arc with a color legend instead of a single-value arc. */
   segments?: GaugeSegment[]
+  /** When true, suppress the legend dots/labels beneath a segmented gauge — use when
+   *  the colour legend lives elsewhere (e.g. on a paired chart). */
+  hideSegmentLegend?: boolean
 }
 
 // Fixed internal viewBox; the SVG element scales to the user-supplied size.
@@ -34,6 +37,7 @@ export const ArcGauge = React.memo(function ArcGauge({
   size = 160,
   displayValue,
   segments,
+  hideSegmentLegend = false,
 }: ArcGaugeProps) {
   const filterId = useId()
   const svgSize = VIEWBOX
@@ -177,7 +181,7 @@ export const ArcGauge = React.memo(function ArcGauge({
         </text>
       </svg>
 
-      {segmentsToRender.length > 0 && (
+      {segmentsToRender.length > 0 && !hideSegmentLegend && (
         <div className="flex gap-x-1.5 lg:gap-x-2 gap-y-0.5 mt-0.5 lg:mt-1 flex-wrap justify-center">
           {segmentsToRender.map((seg, i) => (
             <div key={i} className="flex items-center gap-0.5 lg:gap-1">

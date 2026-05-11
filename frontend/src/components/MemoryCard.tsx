@@ -1,11 +1,19 @@
 import { MetricCard } from './MetricCard'
 import { ArcGauge, type GaugeSegment } from './gauges/ArcGauge'
+import { TimeSeriesChart } from './charts/TimeSeriesChart'
 import { formatBytes, formatGiB } from '../lib/format'
 import type { MemoryMetrics } from '../types/metrics'
+
+interface ChartDataPoint {
+  timestamp: number
+  value: number
+}
 
 interface MemoryCardProps {
   metrics: MemoryMetrics | null
   gaugeSize?: number
+  chartData?: ChartDataPoint[]
+  showCharts?: boolean
 }
 
 const GPU_COLOR = '#76B900'
@@ -13,7 +21,7 @@ const CPU_COLOR = '#3B82F6'
 const CACHE_COLOR = '#71717A'
 const FREE_COLOR = '#27272A'
 
-export function MemoryCard({ metrics, gaugeSize }: MemoryCardProps) {
+export function MemoryCard({ metrics, gaugeSize, chartData, showCharts = false }: MemoryCardProps) {
   if (!metrics) return <MetricCard title="Memory"><p className="text-zinc-500">Waiting for data...</p></MetricCard>
 
   const headlineTotal = metrics.display_total_bytes ?? metrics.total_bytes
@@ -89,6 +97,17 @@ export function MemoryCard({ metrics, gaugeSize }: MemoryCardProps) {
               size={gaugeSize}
             />
           </div>
+        </div>
+      )}
+
+      {showCharts && chartData && (
+        <div className="mt-2">
+          <TimeSeriesChart
+            title="Memory Usage"
+            data={chartData}
+            yDomain={[0, 100]}
+            unit="%"
+          />
         </div>
       )}
 
