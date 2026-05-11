@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import type { CoreMetrics } from '@/types/metrics'
 
 interface CoreHeatmapProps {
@@ -13,6 +13,12 @@ function coreColor(usage: number): string {
   return '#27272a'
 }
 
+// DGX Spark CPU layout: cores 0–4 and 10–14 are efficiency,
+// 5–9 and 15–19 are performance — i.e. id mod 10 < 5 ⇒ efficiency.
+function isEfficiencyCore(id: number): boolean {
+  return id % 10 < 5
+}
+
 export const CoreHeatmap = React.memo(function CoreHeatmap({ cores }: CoreHeatmapProps) {
   const [tooltip, setTooltip] = useState<{ coreId: number; usage: number; x: number; y: number } | null>(null)
 
@@ -23,28 +29,48 @@ export const CoreHeatmap = React.memo(function CoreHeatmap({ cores }: CoreHeatma
 
   const handleMouseLeave = useCallback(() => setTooltip(null), [])
 
-  // Wide grid: more columns = fewer rows = less vertical space
-  const cols = Math.ceil(Math.sqrt(cores.length * 4))
+  const { efficiency, performance } = useMemo(() => {
+    const efficiency: CoreMetrics[] = []
+    const performance: CoreMetrics[] = []
+    for (const core of cores) {
+      if (isEfficiencyCore(core.id)) efficiency.push(core)
+      else performance.push(core)
+    }
+    return { efficiency, performance }
+  }, [cores])
+
+  const renderGroup = (label: string, group: CoreMetrics[]) => {
+    // Wide grid: more columns = fewer rows = less vertical space
+    const cols = Math.max(1, Math.ceil(Math.sqrt(group.length * 4)))
+    return (
+      <div className="flex-1 min-w-0">
+        <div className="text-[8px] lg:text-[9px] font-medium text-zinc-600 mb-0.5 truncate">{label}</div>
+        <div
+          className="grid w-full"
+          style={{
+            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gap: '1px',
+          }}
+        >
+          {group.map((core) => (
+            <div
+              key={core.id}
+              className="h-[6px] lg:h-[10px] 2xl:h-[12px] rounded-[1px] transition-colors duration-300"
+              style={{ backgroundColor: coreColor(core.usage_percent) }}
+              onMouseEnter={(e) => handleMouseEnter(core, e)}
+              onMouseLeave={handleMouseLeave}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative shrink-0 mt-0.5 lg:mt-1">
-      <h3 className="text-[9px] lg:text-[10px] font-medium text-zinc-500 mb-0.5 truncate">Core Heatmap</h3>
-      <div
-        className="grid w-full"
-        style={{
-          gridTemplateColumns: `repeat(${cols}, 1fr)`,
-          gap: '1px',
-        }}
-      >
-        {cores.map((core) => (
-          <div
-            key={core.id}
-            className="h-[6px] lg:h-[10px] 2xl:h-[12px] rounded-[1px] transition-colors duration-300"
-            style={{ backgroundColor: coreColor(core.usage_percent) }}
-            onMouseEnter={(e) => handleMouseEnter(core, e)}
-            onMouseLeave={handleMouseLeave}
-          />
-        ))}
+      <div className="flex gap-2 w-full">
+        {renderGroup('Efficiency', efficiency)}
+        {renderGroup('Performance', performance)}
       </div>
       {tooltip && (
         <div
