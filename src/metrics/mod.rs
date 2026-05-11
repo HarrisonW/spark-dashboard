@@ -4,6 +4,7 @@ pub mod gpu;
 pub mod memory;
 pub mod network;
 
+use crate::comfyui::{ComfyUIState, SharedComfyState};
 use crate::engines::EngineSnapshot;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
@@ -19,6 +20,10 @@ pub struct MetricsSnapshot {
     pub network: NetworkMetrics,
     pub engines: Vec<EngineSnapshot>,
     pub gpu_events: Vec<gpu::GpuEvent>,
+    /// ComfyUI integration state — workflows, queue depth, live progress.
+    /// Always present; `connection_status: "disconnected"` when the
+    /// upstream isn't reachable.
+    pub comfyui: ComfyUIState,
 }
 
 /// Runs the metrics collection loop, broadcasting JSON snapshots to all subscribers.
@@ -31,6 +36,7 @@ pub async fn metrics_collector(
     poll_interval_ms: u64,
     gpu_index: u32,
     engine_state: std::sync::Arc<tokio::sync::RwLock<Vec<EngineSnapshot>>>,
+    comfy_state: SharedComfyState,
 ) {
     let mut interval = tokio::time::interval(Duration::from_millis(poll_interval_ms));
 
@@ -93,6 +99,7 @@ pub async fn metrics_collector(
 
         // Read latest engine snapshots (non-blocking read from shared state)
         let engines = engine_state.read().await.clone();
+        let comfyui = comfy_state.read().await.clone();
 
         let gpu_events = gpu::detect_gpu_events(&device, timestamp_ms);
 
@@ -117,6 +124,7 @@ pub async fn metrics_collector(
             network: network::collect_network_metrics(&networks),
             engines,
             gpu_events,
+            comfyui,
         };
 
         match serde_json::to_string(&snapshot) {
@@ -138,6 +146,7 @@ pub async fn metrics_collector(
     poll_interval_ms: u64,
     _gpu_index: u32,
     engine_state: std::sync::Arc<tokio::sync::RwLock<Vec<EngineSnapshot>>>,
+    comfy_state: SharedComfyState,
 ) {
     let mut interval = tokio::time::interval(Duration::from_millis(poll_interval_ms));
 
@@ -166,6 +175,7 @@ pub async fn metrics_collector(
 
         // Read latest engine snapshots (non-blocking read from shared state)
         let engines = engine_state.read().await.clone();
+        let comfyui = comfy_state.read().await.clone();
 
         let gpu_events = gpu::detect_gpu_events(timestamp_ms);
 
@@ -178,6 +188,7 @@ pub async fn metrics_collector(
             network: network::collect_network_metrics(&networks),
             engines,
             gpu_events,
+            comfyui,
         };
 
         match serde_json::to_string(&snapshot) {

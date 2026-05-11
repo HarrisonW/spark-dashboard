@@ -1,4 +1,5 @@
 mod cli;
+mod comfyui;
 mod engines;
 mod metrics;
 mod server;
@@ -121,6 +122,14 @@ async fn run_server_inner(args: RunArgs) -> Result<(), Box<dyn std::error::Error
     // Shared engine state: engine collector writes, metrics collector reads
     let engine_state: Arc<RwLock<Vec<engines::EngineSnapshot>>> = Arc::new(RwLock::new(Vec::new()));
 
+    // Shared ComfyUI state: the comfyui collector talks to ComfyUI (HTTP +
+    // WS) and writes a consolidated snapshot here; metrics_collector reads
+    // it on each tick so the browser receives ComfyUI updates through the
+    // existing /ws channel.
+    let comfy_state: comfyui::SharedComfyState =
+        Arc::new(RwLock::new(comfyui::ComfyUIState::default()));
+    comfyui::spawn_collector(comfy_state.clone());
+
     // Spawn engine collector loop as separate tokio task (Research Pitfall 7:
     // separate task so slow engine API calls don't block hardware metrics)
     tokio::spawn(engines::engine_collector_loop(
@@ -134,6 +143,7 @@ async fn run_server_inner(args: RunArgs) -> Result<(), Box<dyn std::error::Error
         args.poll_interval,
         args.gpu_index,
         engine_state.clone(),
+        comfy_state.clone(),
     ));
 
     let app = server::create_router(tx);

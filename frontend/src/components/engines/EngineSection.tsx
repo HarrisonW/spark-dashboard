@@ -5,6 +5,9 @@ import { EngineTab } from './EngineTab'
 import { EngineCard } from './EngineCard'
 import { GlobalEngineTab, GLOBAL_TAB_VALUE } from './GlobalEngineTab'
 import { GlobalEngineCard } from './GlobalEngineCard'
+import { ComfyUITab, COMFYUI_TAB_VALUE } from './ComfyUITab'
+import { ComfyUICard } from './ComfyUICard'
+import { EMPTY_COMFY_STATE, type ComfyUIState } from '@/types/comfyui'
 import {
   TabRotationControl,
   parseRotationState,
@@ -113,6 +116,9 @@ interface EngineChartData {
 
 interface EngineSectionProps {
   engines: EngineSnapshot[]
+  /** ComfyUI snapshot from the dashboard's metrics channel. Optional so
+   *  callers that don't have a metrics snapshot yet can still render. */
+  comfy?: ComfyUIState
   showCharts?: boolean
   getChartData?: (metric: string) => ChartDataPoint[]
   requests?: InferenceRequest[]
@@ -120,10 +126,12 @@ interface EngineSectionProps {
 
 export function EngineSection({
   engines,
+  comfy,
   showCharts = false,
   getChartData,
   requests,
 }: EngineSectionProps) {
+  const comfyState = comfy ?? EMPTY_COMFY_STATE
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window === 'undefined') return GLOBAL_TAB_VALUE
     try {
@@ -226,6 +234,7 @@ export function EngineSection({
 
   useEffect(() => {
     if (showGlobalControls || engines.length === 0) return
+    if (activeTab === COMFYUI_TAB_VALUE) return
     const onlyEngineKey = `${engines[0].engine_type}-${engines[0].endpoint}`
     if (activeTab !== onlyEngineKey) {
       setActiveTab(onlyEngineKey)
@@ -236,15 +245,17 @@ export function EngineSection({
     () => [
       ...(showGlobalControls ? [GLOBAL_TAB_VALUE] : []),
       ...engines.map((e) => `${e.engine_type}-${e.endpoint}`),
+      COMFYUI_TAB_VALUE,
     ],
     [engines, showGlobalControls],
   )
 
   useEffect(() => {
-    if (engines.length === 0) return
-    if (activeTab === GLOBAL_TAB_VALUE) return
     if (tabOrder.includes(activeTab)) return
-    setActiveTab(GLOBAL_TAB_VALUE)
+    // Active tab is stale (engine removed, etc.). Fall back to the first
+    // valid tab — GLOBAL when shown, otherwise the first engine, otherwise
+    // ComfyUI as the always-present last resort.
+    setActiveTab(tabOrder[0] ?? COMFYUI_TAB_VALUE)
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.removeItem(ACTIVE_TAB_STORAGE_KEY)
@@ -252,7 +263,7 @@ export function EngineSection({
         // ignore storage errors
       }
     }
-  }, [engines.length, activeTab, tabOrder])
+  }, [activeTab, tabOrder])
 
   const rotationEnabled =
     rotationEnabledState && !focusWithin && !userPaused && tabOrder.length > 1
@@ -264,33 +275,19 @@ export function EngineSection({
     enabled: rotationEnabled,
   })
 
-  // Empty state: no engines detected at all
-  if (engines.length === 0) {
-    return (
-      <Card className="bg-[#0d0d10] border-white/[0.04] h-full">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-zinc-100">LLM Engines</CardTitle>
-        </CardHeader>
-        <CardContent className="py-8">
-          <p className="text-zinc-100 text-center">No inference engines detected</p>
-          <p className="text-zinc-500 text-sm text-center mt-2">
-            Start a vLLM inference engine and it will appear here automatically within seconds.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-
   const activeEngine = engines.find(
     (e) => `${e.engine_type}-${e.endpoint}` === activeTab,
   )
 
   const isGlobal = activeTab === GLOBAL_TAB_VALUE
-  const headerTitle = isGlobal
-    ? 'All Engines'
-    : activeEngine?.model?.name ?? 'No Model Loaded'
+  const isComfy = activeTab === COMFYUI_TAB_VALUE
+  const headerTitle = isComfy
+    ? 'ComfyUI'
+    : isGlobal
+      ? 'All Engines'
+      : activeEngine?.model?.name ?? 'No Model Loaded'
 
-  const headerProviderLogo = !isGlobal ? getProviderLogo(activeEngine?.model?.name) : null
+  const headerProviderLogo = !isGlobal && !isComfy ? getProviderLogo(activeEngine?.model?.name) : null
 
   return (
     <Tabs
@@ -399,6 +396,19 @@ export function EngineSection({
                   />
                 )
               })}
+              {engines.length > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="self-center h-4 w-px bg-white/[0.06] mx-1 shrink-0"
+                />
+              )}
+              <ComfyUITab
+                connectionStatus={comfyState.connectionStatus}
+                queueRemaining={comfyState.queueRemaining}
+                cycle={cycle}
+                intervalMs={activeIntervalMs}
+                showCountdown={isComfy && rotationEnabled}
+              />
             </TabsList>
             <span
               aria-hidden="true"
@@ -474,6 +484,13 @@ export function EngineSection({
               </TabsContent>
             )
           })}
+
+          <TabsContent
+            value={COMFYUI_TAB_VALUE}
+            className="data-[state=active]:flex flex-col"
+          >
+            <ComfyUICard state={comfyState} />
+          </TabsContent>
         </CardContent>
       </Card>
     </Tabs>

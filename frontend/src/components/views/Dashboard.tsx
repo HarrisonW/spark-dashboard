@@ -264,6 +264,7 @@ export function Dashboard({
       <div className="shrink-0 min-h-0">
         <EngineSection
           engines={metrics.engines}
+          comfy={metrics.comfyui}
           showCharts={true}
           getChartData={history.getChartData}
           requests={requests}

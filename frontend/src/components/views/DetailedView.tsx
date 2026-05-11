@@ -96,6 +96,7 @@ export function DetailedView({
       {/* Row 3: Engine Section */}
       <EngineSection
         engines={metrics.engines}
+        comfy={metrics.comfyui}
         showCharts={true}
         getChartData={history.getChartData}
         requests={requests}

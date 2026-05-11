@@ -39,6 +39,12 @@ mime_guess = "2"
 reqwest = { version = "0.13", features = ["json"] }
 async-trait = "0.1"
 prometheus-parse = "0.2"
+# ComfyUI collector keeps a long-running WebSocket to ComfyUI's /ws so it can
+# stream per-node progress into shared state that the dashboard's own /ws
+# broadcasts to browsers. tokio-tungstenite is already transitively present
+# via axum's `ws` feature; pinning matches axum 0.8's expected version.
+tokio-tungstenite = "0.29"
+futures-util = "0.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nvml-wrapper = "0.12"

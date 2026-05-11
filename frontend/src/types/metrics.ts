@@ -1,3 +1,5 @@
+import type { ComfyUIState } from './comfyui'
+
 export interface MetricsSnapshot {
   timestamp_ms: number
   gpu: GpuMetrics
@@ -7,6 +9,10 @@ export interface MetricsSnapshot {
   network: NetworkMetrics
   engines: EngineSnapshot[]
   gpu_events: GpuEventData[]
+  /** Consolidated ComfyUI state — workflows / queue depth / live progress.
+   *  Lives on the snapshot so the browser doesn't need its own ComfyUI
+   *  connection. */
+  comfyui: ComfyUIState
 }
 
 /** Wire-format GPU event matching backend GpuEvent struct */
