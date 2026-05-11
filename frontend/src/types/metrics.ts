@@ -13,6 +13,27 @@ export interface MetricsSnapshot {
    *  Lives on the snapshot so the browser doesn't need its own ComfyUI
    *  connection. */
   comfyui: ComfyUIState
+  /** Wall-power draw from a UniFi-managed PDU outlet. `status: "disabled"`
+   *  when the integration is unconfigured — render the GPU-only Power tile. */
+  power: PowerState
+}
+
+export type PowerStatus = 'disabled' | 'connecting' | 'connected' | 'error'
+
+export interface PowerState {
+  status: PowerStatus
+  /** Instantaneous outlet draw in watts. */
+  wall_watts: number | null
+  voltage: number | null
+  current_amps: number | null
+  power_factor: number | null
+  pdu_name: string | null
+  outlet_label: string | null
+  /** Controller's last_seen epoch (ms) for the PDU — anchors wallPower chart
+   *  points at the moment the controller actually refreshed the reading,
+   *  not the moment the browser ingested the snapshot. */
+  last_seen_ms: number | null
+  error: string | null
 }
 
 /** Wire-format GPU event matching backend GpuEvent struct */

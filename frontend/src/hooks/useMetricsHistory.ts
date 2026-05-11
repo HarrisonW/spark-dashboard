@@ -29,6 +29,7 @@ type MetricKey =
   | 'diskWrite'
   | 'networkRx'
   | 'networkTx'
+  | 'wallPower'
 
 const SYSTEM_METRIC_KEYS: MetricKey[] = [
   'gpuUtil',
@@ -44,6 +45,7 @@ const SYSTEM_METRIC_KEYS: MetricKey[] = [
   'diskWrite',
   'networkRx',
   'networkTx',
+  'wallPower',
 ]
 
 const ENGINE_METRIC_KEYS = [
@@ -114,6 +116,13 @@ function extractValue(metrics: MetricsSnapshot, key: MetricKey): number | null {
       return metrics.network.rx_bytes_per_sec
     case 'networkTx':
       return metrics.network.tx_bytes_per_sec
+    case 'wallPower':
+      // Only record samples once the PDU collector has reported a value;
+      // otherwise the history buffer pads with zeros and skews the chart.
+      return metrics.power?.status === 'connected' &&
+        metrics.power.wall_watts !== null
+        ? metrics.power.wall_watts
+        : null
   }
 }
 
@@ -356,9 +365,21 @@ export function useMetricsHistory(
 
     for (const key of SYSTEM_METRIC_KEYS) {
       const val = extractValue(metrics, key)
-      if (val !== null) {
-        state.buffers[key].push({ timestamp: ts, value: val })
+      if (val === null) continue
+      // PDU outlet stats refresh on the controller's check-in cadence
+      // (~45-55 s on USP-PDU-Pro), so a 2 Hz poll yields long runs of the
+      // same value. Drop the runs: only record a wallPower point when the
+      // wattage actually changed. Anchor each point at the controller's
+      // own `last_seen` so the chart step lines up with when the reading
+      // was refreshed upstream, not when the browser ingested it.
+      if (key === 'wallPower') {
+        const last = state.buffers[key].last(1)
+        if (last.length > 0 && last[0].value === val) continue
+        const wallTs = metrics.power?.last_seen_ms ?? ts
+        state.buffers[key].push({ timestamp: wallTs, value: val })
+        continue
       }
+      state.buffers[key].push({ timestamp: ts, value: val })
     }
 
     // Engine-specific metrics

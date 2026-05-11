@@ -130,6 +130,16 @@ async fn run_server_inner(args: RunArgs) -> Result<(), Box<dyn std::error::Error
         Arc::new(RwLock::new(comfyui::ComfyUIState::default()));
     comfyui::spawn_collector(comfy_state.clone());
 
+    // Shared UniFi PDU power state: the collector authenticates with an
+    // X-API-KEY against the UDM and reads the configured outlet (default
+    // label `Spark`) on the configured cadence. Off by default — the state
+    // stays `status: disabled` unless SPARK_DASHBOARD_UNIFI_HOST is set.
+    let power_state: metrics::power::SharedPowerState =
+        Arc::new(RwLock::new(metrics::power::PowerState::default()));
+    if let Some(cfg) = metrics::power::PduConfig::from_env() {
+        metrics::power::spawn_collector(power_state.clone(), cfg);
+    }
+
     // Spawn engine collector loop as separate tokio task (Research Pitfall 7:
     // separate task so slow engine API calls don't block hardware metrics)
     tokio::spawn(engines::engine_collector_loop(
@@ -144,6 +154,7 @@ async fn run_server_inner(args: RunArgs) -> Result<(), Box<dyn std::error::Error
         args.gpu_index,
         engine_state.clone(),
         comfy_state.clone(),
+        power_state.clone(),
     ));
 
     let app = server::create_router(tx);

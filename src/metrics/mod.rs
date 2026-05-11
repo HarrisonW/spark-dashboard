@@ -3,9 +3,11 @@ pub mod disk;
 pub mod gpu;
 pub mod memory;
 pub mod network;
+pub mod power;
 
 use crate::comfyui::{ComfyUIState, SharedComfyState};
 use crate::engines::EngineSnapshot;
+use power::{PowerState, SharedPowerState};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 
@@ -24,6 +26,10 @@ pub struct MetricsSnapshot {
     /// Always present; `connection_status: "disconnected"` when the
     /// upstream isn't reachable.
     pub comfyui: ComfyUIState,
+    /// Wall-power draw scraped from a UniFi-managed PDU outlet (default
+    /// label `Spark`). `status: "disabled"` when the integration is not
+    /// configured — frontend falls back to GPU-only Power tile.
+    pub power: PowerState,
 }
 
 /// Runs the metrics collection loop, broadcasting JSON snapshots to all subscribers.
@@ -37,6 +43,7 @@ pub async fn metrics_collector(
     gpu_index: u32,
     engine_state: std::sync::Arc<tokio::sync::RwLock<Vec<EngineSnapshot>>>,
     comfy_state: SharedComfyState,
+    power_state: SharedPowerState,
 ) {
     let mut interval = tokio::time::interval(Duration::from_millis(poll_interval_ms));
 
@@ -100,6 +107,7 @@ pub async fn metrics_collector(
         // Read latest engine snapshots (non-blocking read from shared state)
         let engines = engine_state.read().await.clone();
         let comfyui = comfy_state.read().await.clone();
+        let power = power_state.read().await.clone();
 
         let gpu_events = gpu::detect_gpu_events(&device, timestamp_ms);
 
@@ -125,6 +133,7 @@ pub async fn metrics_collector(
             engines,
             gpu_events,
             comfyui,
+            power,
         };
 
         match serde_json::to_string(&snapshot) {
@@ -147,6 +156,7 @@ pub async fn metrics_collector(
     _gpu_index: u32,
     engine_state: std::sync::Arc<tokio::sync::RwLock<Vec<EngineSnapshot>>>,
     comfy_state: SharedComfyState,
+    power_state: SharedPowerState,
 ) {
     let mut interval = tokio::time::interval(Duration::from_millis(poll_interval_ms));
 
@@ -176,6 +186,7 @@ pub async fn metrics_collector(
         // Read latest engine snapshots (non-blocking read from shared state)
         let engines = engine_state.read().await.clone();
         let comfyui = comfy_state.read().await.clone();
+        let power = power_state.read().await.clone();
 
         let gpu_events = gpu::detect_gpu_events(timestamp_ms);
 
@@ -189,6 +200,7 @@ pub async fn metrics_collector(
             engines,
             gpu_events,
             comfyui,
+            power,
         };
 
         match serde_json::to_string(&snapshot) {

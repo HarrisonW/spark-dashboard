@@ -57,6 +57,33 @@ export function Dashboard({
     ? (metrics.gpu.power_watts / metrics.gpu.power_limit_watts) * 100
     : 0
 
+  // Wall power (UniFi-managed PDU outlet). When the integration is enabled
+  // and reporting, the Power tile becomes a Total-Power view with GPU shown
+  // as a segment within it. Otherwise the tile stays GPU-only.
+  const wallW = metrics.power?.wall_watts ?? null
+  const gpuW = metrics.gpu.power_watts
+  const isPowerConnected =
+    metrics.power?.status === 'connected' && wallW !== null
+  // Gauge max sets the arc's full-scale. 240 W matches the DGX Spark's rated
+  // TDP, so a full arc means the box is drawing its design envelope.
+  const POWER_GAUGE_MAX_W = 240
+  const otherW = isPowerConnected && gpuW !== null
+    ? Math.max(0, wallW! - gpuW)
+    : 0
+  const headroomW = isPowerConnected
+    ? Math.max(0, POWER_GAUGE_MAX_W - wallW!)
+    : 0
+  const POWER_GPU_COLOR = '#76B900'
+  const POWER_OTHER_COLOR = '#3B82F6'
+  const POWER_HEAD_COLOR = '#71717A'
+  const powerSegments: GaugeSegment[] | undefined = isPowerConnected
+    ? [
+        { value: gpuW ?? 0, total: POWER_GAUGE_MAX_W, color: POWER_GPU_COLOR, label: 'GPU' },
+        { value: otherW, total: POWER_GAUGE_MAX_W, color: POWER_OTHER_COLOR, label: 'Other' },
+        { value: headroomW, total: POWER_GAUGE_MAX_W, color: POWER_HEAD_COLOR, label: 'Head' },
+      ]
+    : undefined
+
   const gpuUsed = metrics.memory.gpu_estimated_bytes ?? 0
   const cpuUsed = Math.max(0, metrics.memory.used_bytes - gpuUsed)
   const freeAndCached = metrics.memory.available_bytes
@@ -134,19 +161,59 @@ export function Dashboard({
             </div>
           </HwCard>
 
-          {/* GPU Power */}
-          <HwCard title="GPU Power" subtitle={metrics.gpu.name ?? undefined}>
+          {/* GPU Power — when the UniFi PDU integration is on, becomes a
+              Total-Power tile with GPU shown as a segment and the wall draw
+              plotted alongside the GPU draw. */}
+          <HwCard
+            title={isPowerConnected ? 'Power' : 'GPU Power'}
+            subtitle={
+              isPowerConnected && metrics.power.outlet_label
+                ? `${metrics.gpu.name ?? 'GPU'} · ${metrics.power.outlet_label} outlet`
+                : metrics.gpu.name ?? undefined
+            }
+          >
             <div className="flex items-center gap-2 min-w-0 min-h-0 flex-1 overflow-hidden">
               <ArcGauge
-                value={powerPercent}
-                label="GPU Power"
+                value={powerSegments ? undefined : powerPercent}
+                segments={powerSegments}
+                hideSegmentLegend
+                label={isPowerConnected ? 'Power' : 'GPU Power'}
                 unit="W"
-                thresholds={THRESHOLDS.gpuPower}
-                displayValue={metrics.gpu.power_watts !== null ? Math.round(metrics.gpu.power_watts) : 0}
+                thresholds={powerSegments ? undefined : THRESHOLDS.gpuPower}
+                displayValue={
+                  isPowerConnected
+                    ? Math.round(wallW!)
+                    : metrics.gpu.power_watts !== null
+                      ? Math.round(metrics.gpu.power_watts)
+                      : 0
+                }
                 size={HW_GAUGE_PX}
               />
               <div className="flex-1 min-w-0">
-                <TimeSeriesChart data={history.getChartData('gpuPower')} unit="W" height={HW_CHART_HEIGHT} />
+                {isPowerConnected ? (
+                  <TimeSeriesChart
+                    series={[
+                      {
+                        data: history.getChartData('gpuPower'),
+                        label: `GPU ${gpuW !== null ? `${Math.round(gpuW)} W` : ''}`,
+                        color: POWER_GPU_COLOR,
+                      },
+                      {
+                        data: history.getChartData('wallPower'),
+                        label: `Total ${Math.round(wallW!)} W`,
+                        color: POWER_OTHER_COLOR,
+                      },
+                    ]}
+                    unit="W"
+                    height={HW_CHART_HEIGHT}
+                  />
+                ) : (
+                  <TimeSeriesChart
+                    data={history.getChartData('gpuPower')}
+                    unit="W"
+                    height={HW_CHART_HEIGHT}
+                  />
+                )}
               </div>
             </div>
           </HwCard>

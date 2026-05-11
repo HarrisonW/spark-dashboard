@@ -87,17 +87,43 @@ function padData(data: DataPoint[]): DataPoint[] {
 /**
  * Merge multiple series into a single array keyed by timestamp.
  * Each entry has `timestamp` plus one field per series index: `s0`, `s1`, ...
+ *
+ * Series may have very different cadences (e.g. 1 Hz GPU power vs a PDU
+ * reading that updates once every ~50 s). Padding each series with its own
+ * observed interval extrapolates a sparse series' x-range backward by
+ * minutes and squeezes the dense series into the rightmost pixels. Instead,
+ * pick the densest observed cadence and anchor every series to the same
+ * right edge — the densest series sets the chart window.
  */
 function mergeSeries(
   seriesList: ChartSeries[],
 ): Array<Record<string, number>> {
-  // Pad each series individually
-  const paddedAll = seriesList.map((s) => padData(s.data))
+  let tEnd = 0
+  let interval = 1000
+  for (const s of seriesList) {
+    if (s.data.length === 0) continue
+    const last = s.data[s.data.length - 1].timestamp
+    if (last > tEnd) tEnd = last
+    for (let i = 1; i < s.data.length; i++) {
+      const dt = s.data[i].timestamp - s.data[i - 1].timestamp
+      if (dt > 0 && dt < interval) interval = dt
+    }
+  }
+  if (tEnd === 0) return []
+  const tStart = tEnd - (CHART_POINTS - 1) * interval
 
-  // Build a map of timestamp → merged row
+  // Seed the map with a CHART_POINTS evenly-spaced grid so the SVG path
+  // keeps a stable command count (preserves smooth `d` transitions) and so
+  // the x-axis always spans [tStart, tEnd] regardless of how few real
+  // points a sparse series has.
   const map = new Map<number, Record<string, number>>()
-  for (let si = 0; si < paddedAll.length; si++) {
-    for (const pt of paddedAll[si]) {
+  for (let i = 0; i < CHART_POINTS; i++) {
+    const t = tStart + i * interval
+    map.set(t, { timestamp: t })
+  }
+  for (let si = 0; si < seriesList.length; si++) {
+    for (const pt of seriesList[si].data) {
+      if (pt.timestamp < tStart || pt.timestamp > tEnd) continue
       let row = map.get(pt.timestamp)
       if (!row) {
         row = { timestamp: pt.timestamp }
