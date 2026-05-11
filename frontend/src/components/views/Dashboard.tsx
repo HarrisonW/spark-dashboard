@@ -102,16 +102,6 @@ export function Dashboard({
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
-      {/* ── LLM Engines — auto-height, fits content; hardware fills remainder ── */}
-      <div className="shrink-0 min-h-0">
-        <EngineSection
-          engines={metrics.engines}
-          showCharts={true}
-          getChartData={history.getChartData}
-          requests={requests}
-        />
-      </div>
-
       {/* ── Hardware Overview — fills the rest of the viewport ── */}
       <div className="flex-1 min-h-0 bg-[#0a0a0d]/80 rounded-xl border border-white/[0.03] p-1 lg:p-1.5 2xl:p-2 flex flex-col">
         <div className="flex-1 min-h-0 grid grid-cols-2 sm:grid-cols-4 gap-1 lg:gap-1.5 auto-rows-fr">
@@ -238,6 +228,16 @@ export function Dashboard({
           </HwCard>
 
         </div>
+      </div>
+
+      {/* ── LLM Engines — auto-height, fits content; hardware fills remainder ── */}
+      <div className="shrink-0 min-h-0">
+        <EngineSection
+          engines={metrics.engines}
+          showCharts={true}
+          getChartData={history.getChartData}
+          requests={requests}
+        />
       </div>
     </div>
   )
