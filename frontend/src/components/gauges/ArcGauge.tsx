@@ -68,7 +68,12 @@ export const ArcGauge = React.memo(function ArcGauge({
 
   return (
     <div className="flex flex-col items-center">
-      <svg style={{ width: renderSize, height: renderSize }} viewBox={`0 0 ${svgSize} ${svgSize}`}>
+      <svg
+        style={{ width: renderSize, height: renderSize }}
+        viewBox={`0 0 ${svgSize} ${svgSize}`}
+        role="img"
+        aria-label={label}
+      >
         <defs>
           <filter id={filterId} x="-40%" y="-40%" width="180%" height="180%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
@@ -194,8 +199,6 @@ export const ArcGauge = React.memo(function ArcGauge({
           ))}
         </div>
       )}
-
-      <span className="hidden lg:inline text-[10px] 2xl:text-[11px] text-zinc-300 -mt-0.5 truncate max-w-full">{label}</span>
     </div>
   )
 })

@@ -49,10 +49,11 @@ describe('ArcGauge', () => {
     expect(valueArc?.getAttribute('stroke')).toBe('#ef4444')
   })
 
-  it('renders the label text', () => {
-    render(
+  it('exposes the label via aria-label for accessibility', () => {
+    const { container } = render(
       <ArcGauge value={50} max={100} label="Memory" unit="%" />,
     )
-    expect(screen.getByText('Memory')).toBeDefined()
+    const svg = container.querySelector('svg')
+    expect(svg?.getAttribute('aria-label')).toBe('Memory')
   })
 })

@@ -66,8 +66,8 @@ describe('MemoryCard', () => {
     const circles = svg!.querySelectorAll('circle')
     expect(circles.length).toBe(5) // 1 background track + 4 segments
 
-    // Memory label
-    expect(screen.getByText('Memory')).toBeTruthy()
+    // Memory label is exposed via aria-label on the SVG
+    expect(svg!.getAttribute('aria-label')).toBe('Memory')
   })
 
   it('does not show GPU estimation warning when gpu_estimated_bytes is present', () => {

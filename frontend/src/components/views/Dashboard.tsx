@@ -3,7 +3,7 @@ import { CoreHeatmap } from '@/components/charts/CoreHeatmap'
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart'
 import { EngineSection } from '@/components/engines/EngineSection'
 import { THRESHOLDS } from '@/lib/theme'
-import { formatBytes, formatGiB, formatMhz, formatRate } from '@/lib/format'
+import { formatBytes, formatGiB, formatRate } from '@/lib/format'
 import type { MetricsSnapshot } from '@/types/metrics'
 import type { GpuEvent, InferenceRequest } from '@/types/events'
 
@@ -38,6 +38,10 @@ function HwCard({ title, subtitle, children }: { title?: string; subtitle?: stri
  *  Chart height tracks the gauge so the two sit flush in each card. */
 const HW_GAUGE_PX = 'clamp(36px, 5vw, 96px)'
 const HW_CHART_HEIGHT = HW_GAUGE_PX
+
+/** Upper end of the DGX Spark Blackwell graphics clock; used to scale the
+ *  GPU Clock gauge and chart so the arc reflects real-world utilisation. */
+const GPU_CLOCK_MAX_MHZ = 2400
 
 export function Dashboard({
   metrics,
@@ -148,11 +152,15 @@ export function Dashboard({
           {/* GPU Clock */}
           <HwCard title="GPU Clock" subtitle={metrics.gpu.name ?? undefined}>
             <div className="flex items-center gap-2 min-w-0 min-h-0 flex-1 overflow-hidden">
-              <div className="flex flex-col items-center justify-center shrink-0" style={{ width: HW_GAUGE_PX, height: HW_GAUGE_PX }}>
-                <span className="text-sm 2xl:text-base min-[1920px]:text-lg font-bold text-zinc-100 font-mono">{formatMhz(metrics.gpu.clock_graphics_mhz)}</span>
-              </div>
+              <ArcGauge
+                value={metrics.gpu.clock_graphics_mhz ?? 0}
+                max={GPU_CLOCK_MAX_MHZ}
+                label="GPU Clock"
+                unit="MHz"
+                size={HW_GAUGE_PX}
+              />
               <div className="flex-1 min-w-0">
-                <TimeSeriesChart data={history.getChartData('gpuClockGraphics')} unit="MHz" height={HW_CHART_HEIGHT} />
+                <TimeSeriesChart data={history.getChartData('gpuClockGraphics')} unit="MHz" yDomain={[0, GPU_CLOCK_MAX_MHZ]} height={HW_CHART_HEIGHT} />
               </div>
             </div>
           </HwCard>
