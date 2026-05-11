@@ -56,4 +56,37 @@ describe('CircularBuffer', () => {
     expect(buf.last(3)).toEqual([6, 7, 8])
     expect(buf.last(10)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
   })
+
+  describe('fromArray', () => {
+    it('hydrates an empty buffer from an empty array', () => {
+      const buf = CircularBuffer.fromArray<number>(5, [])
+      expect(buf.length).toBe(0)
+      expect(buf.toArray()).toEqual([])
+    })
+
+    it('hydrates under-capacity input verbatim', () => {
+      const buf = CircularBuffer.fromArray<number>(5, [1, 2, 3])
+      expect(buf.length).toBe(3)
+      expect(buf.toArray()).toEqual([1, 2, 3])
+    })
+
+    it('hydrates at exact capacity', () => {
+      const buf = CircularBuffer.fromArray<number>(3, [1, 2, 3])
+      expect(buf.isFull).toBe(true)
+      expect(buf.toArray()).toEqual([1, 2, 3])
+    })
+
+    it('discards the oldest entries when input exceeds capacity', () => {
+      const buf = CircularBuffer.fromArray<number>(3, [1, 2, 3, 4, 5])
+      expect(buf.length).toBe(3)
+      expect(buf.toArray()).toEqual([3, 4, 5])
+    })
+
+    it('returns a buffer that continues to accept pushes', () => {
+      const buf = CircularBuffer.fromArray<number>(3, [1, 2])
+      buf.push(3)
+      buf.push(4)
+      expect(buf.toArray()).toEqual([2, 3, 4])
+    })
+  })
 })

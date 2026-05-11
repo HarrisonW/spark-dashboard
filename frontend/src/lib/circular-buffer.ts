@@ -51,4 +51,10 @@ export class CircularBuffer<T> {
     const arr = this.toArray()
     return arr.slice(Math.max(0, arr.length - n))
   }
+
+  static fromArray<T>(capacity: number, items: T[]): CircularBuffer<T> {
+    const buf = new CircularBuffer<T>(capacity)
+    for (const item of items) buf.push(item)
+    return buf
+  }
 }
