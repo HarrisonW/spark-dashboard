@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import type {
   ComfyHistoryEntry,
-  ComfyProgress,
   ComfyPromptInfo,
   ComfyUIState,
 } from '@/types/comfyui'
@@ -35,18 +34,6 @@ function formatAbsolute(timestampMs: number): string {
   return new Date(timestampMs).toLocaleTimeString()
 }
 
-/** Workflow-level progress percentage combining whole-node completion with
- *  the current node's step counter (e.g. a KSampler at step 14/20 still
- *  counts as 14/20 of a node toward the overall total).
- *  Exported for tests. */
-export function workflowPct(progress: ComfyProgress): number {
-  if (progress.totalNodes <= 0) return 0
-  const nodeFraction =
-    progress.max > 0 ? Math.min(1, Math.max(0, progress.value / progress.max)) : 0
-  const overall = (progress.executedNodes + nodeFraction) / progress.totalNodes
-  return Math.min(100, Math.max(0, overall * 100))
-}
-
 function PanelHeader({ title, badge }: { title: string; badge?: string }) {
   return (
     <div className="flex items-baseline gap-2 mb-1.5 min-w-0">
@@ -72,40 +59,6 @@ function StatusDot({ status }: { status: 'connected' | 'connecting' | 'disconnec
       aria-hidden="true"
       className={`inline-block h-2 w-2 rounded-full ${color}`}
     />
-  )
-}
-
-function ProgressBar({
-  pct,
-  label,
-  indeterminate,
-}: {
-  pct: number
-  label?: string
-  /** Render an animated sliding stripe instead of a fixed-width fill —
-   *  used while a prompt is running but no live `progress` event has
-   *  arrived yet (or `totalNodes` is unknown). */
-  indeterminate?: boolean
-}) {
-  return (
-    <div
-      className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden"
-      role="progressbar"
-      aria-valuenow={indeterminate ? undefined : Math.round(pct)}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label={label}
-      aria-busy={indeterminate ? true : undefined}
-    >
-      {indeterminate ? (
-        <div className="h-full rounded-full bg-[#76B900]/70 comfy-indeterminate-bar" />
-      ) : (
-        <div
-          className="h-full bg-[#76B900] transition-[width] duration-150 ease-linear"
-          style={{ width: `${pct}%` }}
-        />
-      )}
-    </div>
   )
 }
 
@@ -222,7 +175,6 @@ export function ComfyUICard({ state }: ComfyUICardProps) {
     history,
     totalCompleted,
     totalErrors,
-    progress,
     upstreamHost,
   } = state
   const nowMs = useNow()
@@ -316,43 +268,9 @@ export function ComfyUICard({ state }: ComfyUICardProps) {
             <div className="text-xs text-zinc-500 italic py-1">No jobs executing.</div>
           ) : (
             <div className="flex flex-col gap-2">
-              {running.slice(0, 2).map((r) => {
-                const live = progress && progress.promptId === r.promptId ? progress : null
-                // Determinate progress requires both a workflow size and a
-                // live event; otherwise fall back to an animated stripe so
-                // there's always a visible bar in Now Running.
-                const determinate = live !== null && live.totalNodes > 0
-                const pct = determinate ? workflowPct(live!) : 0
-                return (
-                  <div key={r.promptId} className="flex flex-col gap-1 min-w-0">
-                    <PromptRow prompt={r} running nowMs={nowMs} />
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
-                        <span className="truncate">
-                          {live && live.totalNodes > 0
-                            ? `Node ${live.executedNodes}/${live.totalNodes}${
-                                live.nodeId ? ` · #${live.nodeId}` : ''
-                              }`
-                            : 'awaiting progress update'}
-                        </span>
-                        <span className="tabular-nums">
-                          {live && live.max > 0 ? `${live.value}/${live.max}` : ''}
-                        </span>
-                      </div>
-                      <ProgressBar
-                        pct={pct}
-                        label="workflow progress"
-                        indeterminate={!determinate}
-                      />
-                      {determinate && (
-                        <div className="text-[10px] text-zinc-600 font-mono tabular-nums text-right">
-                          {Math.round(pct)}%
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+              {running.slice(0, 2).map((r) => (
+                <PromptRow key={r.promptId} prompt={r} running nowMs={nowMs} />
+              ))}
               {running.length > 2 && (
                 <div className="text-[10px] text-zinc-500 italic font-mono">
                   +{running.length - 2} more running

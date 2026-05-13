@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { ComfyUICard, formatAgo, workflowPct } from '../components/engines/ComfyUICard'
+import { ComfyUICard, formatAgo } from '../components/engines/ComfyUICard'
 import type { ComfyUIState } from '../types/comfyui'
 
 const BASE: ComfyUIState = {
@@ -28,34 +28,6 @@ describe('formatAgo', () => {
   })
   it('clamps negative deltas to "just now"', () => {
     expect(formatAgo(2_000, 1_000)).toBe('just now')
-  })
-})
-
-describe('workflowPct', () => {
-  it('combines executed-node count with current-node step fraction', () => {
-    // 3 nodes done plus half of the 4th, out of 5 total = 70%.
-    expect(
-      workflowPct({
-        promptId: 'p',
-        nodeId: null,
-        value: 10,
-        max: 20,
-        executedNodes: 3,
-        totalNodes: 5,
-      }),
-    ).toBe(70)
-  })
-  it('returns 0 when totalNodes is unknown', () => {
-    expect(
-      workflowPct({
-        promptId: 'p',
-        nodeId: null,
-        value: 1,
-        max: 2,
-        executedNodes: 0,
-        totalNodes: 0,
-      }),
-    ).toBe(0)
   })
 })
 
@@ -87,33 +59,7 @@ describe('ComfyUICard', () => {
     expect(screen.getByText('No completed jobs yet.')).toBeDefined()
   })
 
-  it('renders an indeterminate progress bar when running with no live progress yet', () => {
-    const state: ComfyUIState = {
-      ...BASE,
-      queueRemaining: 1,
-      running: [
-        {
-          number: 50,
-          promptId: 'pending-progress',
-          nodeCount: 7,
-          outputNodeCount: 1,
-          primaryNodeTypes: ['KSampler'],
-          modelName: null,
-          queuedAtMs: Date.now() - 5_000,
-          startedAtMs: Date.now() - 2_000,
-        },
-      ],
-      progress: null,
-    }
-    render(<ComfyUICard state={state} />)
-    const bar = screen.getByRole('progressbar')
-    expect(bar.getAttribute('aria-busy')).toBe('true')
-    // Indeterminate bars don't expose a value.
-    expect(bar.getAttribute('aria-valuenow')).toBeNull()
-    expect(screen.getByText(/awaiting progress update/)).toBeDefined()
-  })
-
-  it('renders a running prompt with a workflow progress bar when WS progress is present', () => {
+  it('renders the running prompt row when a job is executing', () => {
     const state: ComfyUIState = {
       ...BASE,
       queueRemaining: 1,
@@ -129,25 +75,10 @@ describe('ComfyUICard', () => {
           startedAtMs: Date.now() - 10_000,
         },
       ],
-      // executedNodes=3 plus half of node 4 of 5 = 70%.
-      progress: {
-        promptId: 'abcd1234-ef',
-        nodeId: '7',
-        value: 10,
-        max: 20,
-        executedNodes: 3,
-        totalNodes: 5,
-      },
     }
     render(<ComfyUICard state={state} />)
     expect(screen.getByText('#42')).toBeDefined()
     expect(screen.getByText('sdxl.safetensors')).toBeDefined()
-    // Node-level counter shown alongside the workflow bar.
-    expect(screen.getByText('10/20')).toBeDefined()
-    expect(screen.getByText(/Node 3\/5/)).toBeDefined()
-    const bar = screen.getByRole('progressbar')
-    expect(bar.getAttribute('aria-valuenow')).toBe('70')
-    // "started X ago" surfaced below the row title.
     expect(screen.getByText(/started \d+s ago/)).toBeDefined()
   })
 

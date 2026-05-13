@@ -156,25 +156,11 @@
   will-change: transform;
 }
 
-/* Indeterminate progress stripe — slides across the bar while we wait for
- * a real progress event (e.g. ComfyUI's "Now Running" before the first WS
- * tick arrives). */
-@keyframes comfy-indeterminate-slide {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(250%); }
-}
-.comfy-indeterminate-bar {
-  width: 40%;
-  animation: comfy-indeterminate-slide 1.4s ease-in-out infinite;
-  will-change: transform;
-}
-
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .recharts-line-curve path { transition: none !important; }
   .animate-pulse-dot { animation: none; }
   .tab-rotation-bar { animation: none; transform: scaleX(0); }
-  .comfy-indeterminate-bar { animation: none; width: 100%; transform: none; }
 }
 
 /* Subtle scrollbar for dark theme */
