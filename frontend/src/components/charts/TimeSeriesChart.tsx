@@ -183,25 +183,24 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
 
   return (
     <div className={cn(fillHeight && 'flex flex-col h-full min-h-0', className)}>
-      {/* Header band: title on the left, legend on the right. Reserved
-          min-height keeps charts with wrapping multi-series legends
-          (Prefill / Decode / Latency) aligned with single-title charts
-          (KV / E2E) along the bottom even if the legend wraps. */}
-      <div className="flex items-start justify-between gap-3 mb-1 min-h-[1.25rem]">
-        {title ? (
-          <h3 className="text-xs font-medium text-zinc-500">{title}</h3>
-        ) : (
-          <span />
-        )}
+      {/* Header band: title left, legend right — always a single row.
+          Legend stays inline (flex-nowrap, no internal wrapping) so it
+          sits beside the title even in narrow chart cells. The title
+          truncates if the row gets tight rather than pushing the legend
+          onto a second line below. */}
+      <div className="flex items-center justify-between gap-2 mb-1 min-h-[1.25rem]">
+        <h3 className="text-xs font-medium text-zinc-500 truncate min-w-0">
+          {title}
+        </h3>
         {isMulti && (
-          <div className="flex items-center justify-end gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-nowrap shrink-0">
             {series.map((s, i) => (
-              <div key={i} className="flex items-center gap-1.5">
+              <div key={i} className="flex items-center gap-1 whitespace-nowrap">
                 <span
-                  className="inline-block w-2.5 h-[2px] rounded-full"
+                  className="inline-block w-2 h-[2px] rounded-full"
                   style={{ backgroundColor: s.color }}
                 />
-                <span className="text-[11px] text-zinc-500">{s.label}</span>
+                <span className="text-[10px] text-zinc-500">{s.label}</span>
               </div>
             ))}
           </div>
