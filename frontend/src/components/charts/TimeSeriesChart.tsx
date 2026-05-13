@@ -69,25 +69,38 @@ function eventStrokeColor(type: string): string {
   return NVIDIA_THEME.warning
 }
 
-// Pad data to a fixed number of points so the SVG path always has the same
-// number of commands, enabling smooth CSS `d` transitions between frames.
-// 300 ≈ 5 minutes at 1 Hz, matching DEFAULT_WINDOW_SECONDS in useMetricsHistory.
-const CHART_POINTS = 300
+// Chart window — must match DEFAULT_WINDOW_SECONDS in useMetricsHistory.
+// Anchoring the x-axis to a fixed window (instead of deriving it from the
+// observed sample interval × point count) keeps the chart span consistent
+// regardless of cadence drift or sparse series like PDU wall-power.
+export const CHART_WINDOW_MS = 5 * 60 * 1000
 
-function padData(data: DataPoint[]): DataPoint[] {
-  if (data.length === 0) return []
-  if (data.length >= CHART_POINTS) return data.slice(-CHART_POINTS)
+export function latestTimestamp(
+  data: DataPoint[] | undefined,
+  seriesList: ChartSeries[] | undefined,
+): number {
+  let tEnd = 0
+  if (data) {
+    for (const p of data) if (p.timestamp > tEnd) tEnd = p.timestamp
+  }
+  if (seriesList) {
+    for (const s of seriesList) {
+      for (const p of s.data) if (p.timestamp > tEnd) tEnd = p.timestamp
+    }
+  }
+  return tEnd
+}
 
-  const first = data[0]
-  const interval = data.length > 1 ? data[1].timestamp - data[0].timestamp : 1000
-  const padding = Array.from(
-    { length: CHART_POINTS - data.length },
-    (_, i) => ({
-      timestamp: first.timestamp - (CHART_POINTS - data.length - i) * interval,
-      value: first.value,
-    }),
-  )
-  return [...padding, ...data]
+export function clampSingleSeries(
+  data: DataPoint[],
+  tStart: number,
+  tEnd: number,
+): DataPoint[] {
+  const out: DataPoint[] = []
+  for (const p of data) {
+    if (p.timestamp >= tStart && p.timestamp <= tEnd) out.push(p)
+  }
+  return out
 }
 
 /**
@@ -95,38 +108,17 @@ function padData(data: DataPoint[]): DataPoint[] {
  * Each entry has `timestamp` plus one field per series index: `s0`, `s1`, ...
  *
  * Series may have very different cadences (e.g. 1 Hz GPU power vs a PDU
- * reading that updates once every ~50 s). Padding each series with its own
- * observed interval extrapolates a sparse series' x-range backward by
- * minutes and squeezes the dense series into the rightmost pixels. Instead,
- * pick the densest observed cadence and anchor every series to the same
- * right edge — the densest series sets the chart window.
+ * reading that updates once every ~50 s). The chart x-axis is anchored to
+ * [tEnd - CHART_WINDOW_MS, tEnd] via an explicit XAxis domain, so we don't
+ * need to extrapolate any padding here — just merge the real points that
+ * fall inside the window and let recharts position them numerically.
  */
-function mergeSeries(
+export function mergeSeries(
   seriesList: ChartSeries[],
+  tStart: number,
+  tEnd: number,
 ): Array<Record<string, number>> {
-  let tEnd = 0
-  let interval = 1000
-  for (const s of seriesList) {
-    if (s.data.length === 0) continue
-    const last = s.data[s.data.length - 1].timestamp
-    if (last > tEnd) tEnd = last
-    for (let i = 1; i < s.data.length; i++) {
-      const dt = s.data[i].timestamp - s.data[i - 1].timestamp
-      if (dt > 0 && dt < interval) interval = dt
-    }
-  }
-  if (tEnd === 0) return []
-  const tStart = tEnd - (CHART_POINTS - 1) * interval
-
-  // Seed the map with a CHART_POINTS evenly-spaced grid so the SVG path
-  // keeps a stable command count (preserves smooth `d` transitions) and so
-  // the x-axis always spans [tStart, tEnd] regardless of how few real
-  // points a sparse series has.
   const map = new Map<number, Record<string, number>>()
-  for (let i = 0; i < CHART_POINTS; i++) {
-    const t = tStart + i * interval
-    map.set(t, { timestamp: t })
-  }
   for (let si = 0; si < seriesList.length; si++) {
     for (const pt of seriesList[si].data) {
       if (pt.timestamp < tStart || pt.timestamp > tEnd) continue
@@ -138,7 +130,6 @@ function mergeSeries(
       row[`s${si}`] = pt.value
     }
   }
-
   return Array.from(map.values()).sort((a, b) => a.timestamp - b.timestamp)
 }
 
@@ -157,13 +148,20 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
 }: TimeSeriesChartProps) {
   const isMulti = series && series.length > 0
 
+  // Anchor the x-axis to a fixed 5-minute window ending at the latest
+  // observed sample. Falling back to `Date.now()` on a fully empty chart
+  // keeps tick labels current instead of rendering at the Unix epoch.
+  const observedEnd = latestTimestamp(data, series)
+  const tEnd = observedEnd > 0 ? observedEnd : Date.now()
+  const tStart = tEnd - CHART_WINDOW_MS
+
   // Build chart config and data depending on mode
   let chartData: Array<Record<string, number>>
   let chartConfig: Record<string, { label: string; color: string }>
   let lineKeys: Array<{ key: string; color: string; axis: 'left' | 'right' }>
 
   if (isMulti) {
-    chartData = mergeSeries(series)
+    chartData = mergeSeries(series, tStart, tEnd)
     chartConfig = {}
     lineKeys = []
     for (let i = 0; i < series.length; i++) {
@@ -173,8 +171,8 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
     }
   } else {
     const lineColor = color ?? NVIDIA_THEME.chartLine
-    const paddedData = padData(data ?? [])
-    chartData = paddedData.map((d) => ({ timestamp: d.timestamp, value: d.value }))
+    const clamped = clampSingleSeries(data ?? [], tStart, tEnd)
+    chartData = clamped.map((d) => ({ timestamp: d.timestamp, value: d.value }))
     chartConfig = { value: { label: unit ?? '', color: lineColor } }
     lineKeys = [{ key: 'value', color: lineColor, axis: 'left' }]
   }
@@ -220,12 +218,16 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
           />
           <XAxis
             dataKey="timestamp"
+            type="number"
+            domain={[tStart, tEnd]}
+            scale="time"
             stroke={NVIDIA_THEME.chartAxis}
             fontSize={11}
             tickLine={false}
             axisLine={false}
             tickFormatter={formatTime}
             minTickGap={60}
+            allowDataOverflow
           />
           <YAxis
             yAxisId="left"
