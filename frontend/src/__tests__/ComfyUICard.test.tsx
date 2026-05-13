@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { ComfyUICard, formatAgo } from '../components/engines/ComfyUICard'
+import {
+  ComfyUICard,
+  computeQueueStats,
+  formatAgo,
+  formatEta,
+  runningPromptFraction,
+} from '../components/engines/ComfyUICard'
 import type { ComfyUIState } from '../types/comfyui'
 
 const BASE: ComfyUIState = {
@@ -28,6 +34,62 @@ describe('formatAgo', () => {
   })
   it('clamps negative deltas to "just now"', () => {
     expect(formatAgo(2_000, 1_000)).toBe('just now')
+  })
+})
+
+describe('runningPromptFraction', () => {
+  it('returns 0 for null or empty progress', () => {
+    expect(runningPromptFraction(null)).toBe(0)
+    expect(
+      runningPromptFraction({
+        promptId: 'x',
+        nodeId: null,
+        value: 0,
+        max: 0,
+        executedNodes: 0,
+        totalNodes: 0,
+      }),
+    ).toBe(0)
+  })
+  it('combines node-level and step-level progress', () => {
+    // 2 of 4 nodes done plus 5/10 through the 3rd: (2 + 0.5)/4 = 0.625
+    expect(
+      runningPromptFraction({
+        promptId: 'x',
+        nodeId: '3',
+        value: 5,
+        max: 10,
+        executedNodes: 2,
+        totalNodes: 4,
+      }),
+    ).toBeCloseTo(0.625, 3)
+  })
+  it('clamps over-100% workflows to 1.0', () => {
+    expect(
+      runningPromptFraction({
+        promptId: 'x',
+        nodeId: '9',
+        value: 0,
+        max: 1,
+        executedNodes: 9,
+        totalNodes: 4,
+      }),
+    ).toBe(1)
+  })
+})
+
+describe('formatEta', () => {
+  it('handles null and negative durations', () => {
+    expect(formatEta(null)).toBe('—')
+    expect(formatEta(-100)).toBe('—')
+  })
+  it('formats sub-second, second, minute and hour scales', () => {
+    expect(formatEta(400)).toBe('<1s')
+    expect(formatEta(45_000)).toBe('45s')
+    expect(formatEta(90_000)).toBe('1m 30s')
+    expect(formatEta(2 * 60_000)).toBe('2m')
+    expect(formatEta(3_660_000)).toBe('1h 1m')
+    expect(formatEta(2 * 3600_000)).toBe('2h')
   })
 })
 
@@ -133,6 +195,77 @@ describe('ComfyUICard', () => {
     expect(screen.getByText(/finished 10m ago/)).toBeDefined()
     // error counter in the status panel
     expect(screen.getByText(/\+1 err/)).toBeDefined()
+  })
+
+  it('renders the queue-progress panel with percent, ETA, and a progressbar', () => {
+    const startedAt = 1_000_000
+    const now = startedAt + 60_000 // 60s into a batch
+    const state: ComfyUIState = {
+      ...BASE,
+      queueRemaining: 2,
+      totalCompleted: 2, // two completions landed since batch start
+      running: [
+        {
+          number: 12,
+          promptId: 'r1',
+          nodeCount: 5,
+          outputNodeCount: 1,
+          primaryNodeTypes: ['KSampler'],
+          modelName: null,
+          queuedAtMs: now - 5000,
+          startedAtMs: now - 2000,
+        },
+      ],
+      progress: {
+        promptId: 'r1',
+        nodeId: '3',
+        value: 5,
+        max: 10,
+        executedNodes: 2,
+        totalNodes: 5,
+      },
+    }
+    const stats = computeQueueStats(
+      state,
+      { startedAtMs: startedAt, completedAtStart: 0 },
+      now,
+    )
+    expect(stats.active).toBe(true)
+    expect(stats.done).toBe(2)
+    expect(stats.remaining).toBe(2)
+    expect(stats.total).toBe(4)
+    // 2 done + 0.5 in-progress / 4 = 0.625
+    expect(stats.fraction).toBeCloseTo(0.625, 3)
+    expect(stats.avgMsPerItem).toBe(30_000)
+    // (2 - 0.5) * 30s = 45s
+    expect(stats.etaMs).toBe(45_000)
+  })
+
+  it('treats an empty queue as no active batch', () => {
+    const stats = computeQueueStats(BASE, null, 1_000_000)
+    expect(stats.active).toBe(false)
+    expect(stats.fraction).toBe(0)
+    expect(stats.etaMs).toBeNull()
+    expect(stats.avgMsPerItem).toBeNull()
+  })
+
+  it('returns null ETA before any completion has landed in the batch', () => {
+    const state: ComfyUIState = { ...BASE, queueRemaining: 3, totalCompleted: 0 }
+    const stats = computeQueueStats(
+      state,
+      { startedAtMs: 1_000_000, completedAtStart: 0 },
+      1_005_000,
+    )
+    expect(stats.active).toBe(true)
+    expect(stats.done).toBe(0)
+    expect(stats.etaMs).toBeNull()
+    expect(stats.avgMsPerItem).toBeNull()
+  })
+
+  it('renders the QueueProgress card in the connected layout', () => {
+    render(<ComfyUICard state={BASE} />)
+    expect(screen.getByText('Queue Progress')).toBeDefined()
+    expect(screen.getByText('Queue is empty.')).toBeDefined()
   })
 
   it('shows queue depth and workflow count in the status panel', () => {
