@@ -228,7 +228,13 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
             fontSize={11}
             tickLine={false}
             axisLine={false}
-            domain={yDomain}
+            domain={yDomain ?? [0, 'auto']}
+            // Anchor every chart to 0 visually. Recharts' default
+            // `interval="preserveEnd"` drops the first (0) tick when the
+            // plot area is short — e.g. on narrower viewports where the
+            // hardware-card charts compress vertically. `preserveStartEnd`
+            // keeps both the 0 and max labels regardless.
+            interval="preserveStartEnd"
           />
           {hasRightAxis && (
             <YAxis
@@ -239,6 +245,8 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
               fontSize={11}
               tickLine={false}
               axisLine={false}
+              domain={[0, 'auto']}
+              interval="preserveStartEnd"
             />
           )}
           <ChartTooltip content={<ChartTooltipContent />} />
