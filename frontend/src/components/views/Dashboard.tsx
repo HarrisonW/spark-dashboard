@@ -32,14 +32,13 @@ function HwCard({ title, subtitle, children }: { title?: string; subtitle?: stri
   )
 }
 
-/** Shared responsive height for hardware mini-charts and gauges.
- *  Aggressive lower bounds keep the heatmap and memory split visible on
- *  cramped screens (13" laptops); upper bounds let big monitors breathe.
- *  The 56px floor keeps gauges legible on phones and half-screen tablets
- *  where the viewport is too narrow for 5vw to render a usable dial.
- *  Chart height tracks the gauge so the two sit flush in each card. */
+/** Responsive size for the gauge dial. Aggressive lower bounds keep the
+ *  heatmap and memory split visible on cramped screens (13" laptops);
+ *  upper bounds let big monitors breathe. The 56px floor keeps gauges
+ *  legible on phones and half-screen tablets where the viewport is too
+ *  narrow for 5vw to render a usable dial. Charts use `fillHeight` to
+ *  stretch to the bottom of each card rather than tracking the gauge. */
 const HW_GAUGE_PX = 'clamp(56px, 5vw, 96px)'
-const HW_CHART_HEIGHT = HW_GAUGE_PX
 
 /** Upper end of the DGX Spark Blackwell graphics clock; used to scale the
  *  GPU Clock gauge and chart so the arc reflects real-world utilisation. */
@@ -145,8 +144,8 @@ export function Dashboard({
           <HwCard title="GPU Utilization" subtitle={metrics.gpu.name ?? undefined}>
             <div className="flex items-center gap-2 min-w-0 min-h-0 flex-1 overflow-hidden">
               <ArcGauge value={metrics.gpu.utilization_percent ?? 0} label="GPU Util" unit="%" size={HW_GAUGE_PX} />
-              <div className="flex-1 min-w-0">
-                <TimeSeriesChart data={history.getChartData('gpuUtil')} yDomain={[0, 100]} unit="%" events={allEvents} requests={requestSpans} height={HW_CHART_HEIGHT} />
+              <div className="flex-1 min-w-0 self-stretch flex flex-col">
+                <TimeSeriesChart data={history.getChartData('gpuUtil')} yDomain={[0, 100]} unit="%" events={allEvents} requests={requestSpans} fillHeight />
               </div>
             </div>
           </HwCard>
@@ -155,8 +154,8 @@ export function Dashboard({
           <HwCard title="GPU Temp" subtitle={metrics.gpu.name ?? undefined}>
             <div className="flex items-center gap-2 min-w-0 min-h-0 flex-1 overflow-hidden">
               <ArcGauge value={metrics.gpu.temperature_celsius ?? 0} label="GPU Temp" unit="°C" thresholds={THRESHOLDS.gpuTemp} size={HW_GAUGE_PX} />
-              <div className="flex-1 min-w-0">
-                <TimeSeriesChart data={history.getChartData('gpuTemp')} yDomain={[0, 100]} unit="°C" height={HW_CHART_HEIGHT} />
+              <div className="flex-1 min-w-0 self-stretch flex flex-col">
+                <TimeSeriesChart data={history.getChartData('gpuTemp')} yDomain={[0, 100]} unit="°C" fillHeight />
               </div>
             </div>
           </HwCard>
@@ -189,7 +188,7 @@ export function Dashboard({
                 }
                 size={HW_GAUGE_PX}
               />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 self-stretch flex flex-col">
                 {isPowerConnected ? (
                   <TimeSeriesChart
                     series={[
@@ -205,13 +204,13 @@ export function Dashboard({
                       },
                     ]}
                     unit="W"
-                    height={HW_CHART_HEIGHT}
+                    fillHeight
                   />
                 ) : (
                   <TimeSeriesChart
                     data={history.getChartData('gpuPower')}
                     unit="W"
-                    height={HW_CHART_HEIGHT}
+                    fillHeight
                   />
                 )}
               </div>
@@ -228,8 +227,8 @@ export function Dashboard({
                 unit="MHz"
                 size={HW_GAUGE_PX}
               />
-              <div className="flex-1 min-w-0">
-                <TimeSeriesChart data={history.getChartData('gpuClockGraphics')} unit="MHz" yDomain={[0, GPU_CLOCK_MAX_MHZ]} height={HW_CHART_HEIGHT} />
+              <div className="flex-1 min-w-0 self-stretch flex flex-col">
+                <TimeSeriesChart data={history.getChartData('gpuClockGraphics')} unit="MHz" yDomain={[0, GPU_CLOCK_MAX_MHZ]} fillHeight />
               </div>
             </div>
           </HwCard>
@@ -238,8 +237,8 @@ export function Dashboard({
           <HwCard title="CPU" subtitle={metrics.cpu.name ?? undefined}>
             <div className="flex items-center gap-2 min-w-0 min-h-0 flex-1 overflow-hidden">
               <ArcGauge value={metrics.cpu.aggregate_percent} label="CPU" unit="%" thresholds={THRESHOLDS.cpuUsage} size={HW_GAUGE_PX} />
-              <div className="flex-1 min-w-0">
-                <TimeSeriesChart data={history.getChartData('cpuAggregate')} yDomain={[0, 100]} unit="%" height={HW_CHART_HEIGHT} />
+              <div className="flex-1 min-w-0 self-stretch flex flex-col">
+                <TimeSeriesChart data={history.getChartData('cpuAggregate')} yDomain={[0, 100]} unit="%" fillHeight />
               </div>
             </div>
             {metrics.cpu.per_core.length > 0 && <CoreHeatmap cores={metrics.cpu.per_core} />}
@@ -255,7 +254,7 @@ export function Dashboard({
                 size={HW_GAUGE_PX}
                 hideSegmentLegend
               />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 self-stretch flex flex-col">
                 <TimeSeriesChart
                   series={[
                     { data: history.getChartData('memoryGpuPercent'), label: `GPU ${formatBytes(gpuUsed)}`, color: MEM_GPU_COLOR },
@@ -264,7 +263,7 @@ export function Dashboard({
                   ]}
                   yDomain={[0, 100]}
                   unit="%"
-                  height={HW_CHART_HEIGHT}
+                  fillHeight
                 />
               </div>
             </div>
@@ -283,7 +282,7 @@ export function Dashboard({
                   <span className="text-xs 2xl:text-sm min-[1920px]:text-base font-bold text-zinc-100 font-mono">{formatRate(metrics.disk.write_bytes_per_sec)}</span>
                 </div>
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 self-stretch flex flex-col">
                 <TimeSeriesChart
                   series={[
                     { data: diskTotal, label: 'Total', color: TOTAL_COLOR },
@@ -291,7 +290,7 @@ export function Dashboard({
                     { data: diskWrite, label: 'Write', color: DISK_WRITE_COLOR },
                   ]}
                   unit="B/s"
-                  height={HW_CHART_HEIGHT}
+                  fillHeight
                 />
               </div>
             </div>
@@ -310,7 +309,7 @@ export function Dashboard({
                   <span className="text-xs 2xl:text-sm min-[1920px]:text-base font-bold text-zinc-100 font-mono">{formatRate(metrics.network.tx_bytes_per_sec)}</span>
                 </div>
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 self-stretch flex flex-col">
                 <TimeSeriesChart
                   series={[
                     { data: networkTotal, label: 'Total', color: TOTAL_COLOR },
@@ -318,7 +317,7 @@ export function Dashboard({
                     { data: networkTx, label: 'TX', color: NET_TX_COLOR },
                   ]}
                   unit="B/s"
-                  height={HW_CHART_HEIGHT}
+                  fillHeight
                 />
               </div>
             </div>

@@ -290,7 +290,7 @@ export function EngineCard({
            *   1 Prefill · 2 Decode · 3 Latency · 4 SLO Goodput · 5 Requests · 6 Cache
            * E2E sits under SLO Goodput (col 4); Requests under col 5; KV under Cache (col 6). */}
           {showCharts && chartData && (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 pt-1">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 pt-1 -mb-3">
               <TimeSeriesChart
                 title="Prefill Throughput"
                 series={prefillTokenSeries(chartData)}

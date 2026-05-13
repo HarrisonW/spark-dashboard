@@ -14,6 +14,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart'
 import { NVIDIA_THEME } from '@/lib/theme'
+import { cn } from '@/lib/utils'
 
 interface DataPoint {
   timestamp: number
@@ -47,6 +48,10 @@ interface TimeSeriesChartProps {
   title?: string
   /** Extra classes applied to the outer wrapper (e.g. grid column placement). */
   className?: string
+  /** When true, the plot area stretches to fill its parent's height
+   *  instead of using `height`. The parent must establish a height
+   *  (e.g. via `h-full` inside a flex column). */
+  fillHeight?: boolean
 }
 
 function formatTime(timestamp: number): string {
@@ -148,6 +153,7 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
   height = 160,
   title,
   className,
+  fillHeight,
 }: TimeSeriesChartProps) {
   const isMulti = series && series.length > 0
 
@@ -178,7 +184,7 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
   const Y_AXIS_WIDTH = 32
 
   return (
-    <div className={className}>
+    <div className={cn(fillHeight && 'flex flex-col h-full min-h-0', className)}>
       {/* Reserve a fixed header band so charts with wrapping multi-series
           legends (Prefill / Decode / Latency) line up with single-title
           charts (KV / E2E) along the bottom. Legend always sits on its own
@@ -203,8 +209,8 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
       </div>
       <ChartContainer
         config={chartConfig}
-        style={{ height: typeof height === 'number' ? `${height}px` : height }}
-        className="w-full"
+        style={fillHeight ? undefined : { height: typeof height === 'number' ? `${height}px` : height }}
+        className={cn('w-full', fillHeight && 'flex-1 min-h-0')}
       >
         <LineChart data={chartData}>
           <CartesianGrid
