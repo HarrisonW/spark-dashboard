@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   ComfyHistoryEntry,
   ComfyPromptInfo,
-  ComfyProgress,
   ComfyUIState,
 } from '@/types/comfyui'
 
@@ -35,17 +34,6 @@ function formatAbsolute(timestampMs: number): string {
   return new Date(timestampMs).toLocaleTimeString()
 }
 
-/** Convert a `ComfyProgress` snapshot to a 0..1 fraction representing how
- *  far along the currently-running prompt is, blending the node-level and
- *  step-level scales. Exported for testing. */
-export function runningPromptFraction(progress: ComfyProgress | null): number {
-  if (!progress || progress.totalNodes <= 0) return 0
-  const innerFraction = progress.max > 0 ? progress.value / progress.max : 0
-  const raw = (progress.executedNodes + innerFraction) / progress.totalNodes
-  if (!Number.isFinite(raw)) return 0
-  return Math.max(0, Math.min(1, raw))
-}
-
 /** Format an ETA expressed in milliseconds as a compact "Xm Ys"-style string.
  *  Returns "—" for null/non-finite inputs. Exported for testing. */
 export function formatEta(ms: number | null): string {
@@ -59,6 +47,15 @@ export function formatEta(ms: number | null): string {
   const hrs = Math.floor(mins / 60)
   const remMins = mins % 60
   return remMins === 0 ? `${hrs}h` : `${hrs}h ${remMins}m`
+}
+
+/** Format a wall-clock millisecond timestamp as a short local time (e.g.
+ *  "3:42 PM"). Exported for testing. */
+export function formatLocalTime(timestampMs: number): string {
+  return new Date(timestampMs).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
 function PanelHeader({ title, badge }: { title: string; badge?: string }) {
@@ -192,152 +189,97 @@ function useNow(): number {
   return now
 }
 
-interface QueueBatch {
-  /** Wall-clock ms when we first noticed this batch (queue went non-empty). */
-  startedAtMs: number
-  /** `totalCompleted` at the moment the batch started — used to count
-   *  completions that have landed since. */
-  completedAtStart: number
-}
-
-/** Track the lifetime of the current "queue batch" — the contiguous run
- *  from when the queue went non-empty until it next drains. While a batch
- *  is in flight, returns a snapshot of when it started and how many jobs
- *  had been completed at that point. */
-function useQueueBatch(queueDepth: number, totalCompleted: number): QueueBatch | null {
-  const [batch, setBatch] = useState<QueueBatch | null>(null)
-  // Read latest counters inside the effect without re-running it on every tick.
-  const completedRef = useRef(totalCompleted)
-  completedRef.current = totalCompleted
-
-  useEffect(() => {
-    if (queueDepth > 0) {
-      setBatch((prev) =>
-        prev ?? { startedAtMs: Date.now(), completedAtStart: completedRef.current },
-      )
-    } else {
-      setBatch(null)
-    }
-  }, [queueDepth])
-
-  return batch
-}
-
 interface QueueProgressStats {
-  /** True when there's an active batch (queue is non-empty). */
+  /** True when the queue is non-empty. */
   active: boolean
-  /** Headline 0..1 fraction including fractional progress on the running prompt. */
-  fraction: number
-  /** Whole-completion count since the batch started. */
-  done: number
   /** queue_running + queue_pending. */
   remaining: number
-  /** done + remaining (the denominator). */
-  total: number
-  /** Estimated ms until the queue drains, or null if we don't have enough
-   *  signal yet (i.e. no completion has landed during this batch). */
+  /** Wall-clock duration of the most recently completed task, derived from
+   *  the gap between the two newest history entries. `null` when we don't
+   *  have two completions to compare. */
+  lastTaskDurationMs: number | null
+  /** Projected ms until the queue drains: `lastTaskDurationMs * remaining`.
+   *  `null` when we don't yet have a duration estimate. */
   etaMs: number | null
-  /** Average ms per item, or null if we have no completions during this batch. */
-  avgMsPerItem: number | null
+  /** Wall-clock ms when the queue is projected to drain, i.e. `nowMs + etaMs`.
+   *  `null` when we don't yet have an estimate. */
+  etaCompleteAtMs: number | null
 }
 
-/** Derive headline stats for the QueueProgress panel from the latest state
- *  plus the cached batch start. Exported for testing. */
+/** Compute the duration of the most recently completed task using the gap
+ *  between the two newest history entries. Exported for testing. */
+export function lastTaskDurationMs(history: ComfyHistoryEntry[]): number | null {
+  if (history.length < 2) return null
+  const newest = history[0].completedAtMs
+  const prev = history[1].completedAtMs
+  const delta = newest - prev
+  return delta > 0 ? delta : null
+}
+
+/** Derive headline stats for the QueueProgress panel from the latest state.
+ *  Exported for testing. */
 export function computeQueueStats(
   state: ComfyUIState,
-  batch: QueueBatch | null,
   nowMs: number,
 ): QueueProgressStats {
   const remaining = state.queueRemaining
-  if (remaining <= 0 || batch === null) {
+  if (remaining <= 0) {
     return {
       active: false,
-      fraction: 0,
-      done: 0,
       remaining,
-      total: 0,
+      lastTaskDurationMs: null,
       etaMs: null,
-      avgMsPerItem: null,
+      etaCompleteAtMs: null,
     }
   }
-  const done = Math.max(0, state.totalCompleted - batch.completedAtStart)
-  const inProgress = runningPromptFraction(state.progress)
-  const total = done + remaining
-  const effectiveDone = Math.min(total, done + inProgress)
-  const fraction = total > 0 ? effectiveDone / total : 0
-
-  let avgMsPerItem: number | null = null
-  let etaMs: number | null = null
-  const elapsedMs = Math.max(0, nowMs - batch.startedAtMs)
-  if (done > 0) {
-    avgMsPerItem = elapsedMs / done
-    const remainingWork = Math.max(0, remaining - inProgress)
-    etaMs = remainingWork * avgMsPerItem
-  }
+  const duration = lastTaskDurationMs(state.history)
+  const etaMs = duration !== null ? duration * remaining : null
+  const etaCompleteAtMs = etaMs !== null ? nowMs + etaMs : null
 
   return {
     active: true,
-    fraction: Math.max(0, Math.min(1, fraction)),
-    done,
     remaining,
-    total,
+    lastTaskDurationMs: duration,
     etaMs,
-    avgMsPerItem,
+    etaCompleteAtMs,
   }
 }
 
 function QueueProgressPanel({ stats }: { stats: QueueProgressStats }) {
-  const percentLabel = `${Math.round(stats.fraction * 100)}%`
-  const widthPct = `${(stats.fraction * 100).toFixed(1)}%`
   return (
     <div className="bg-white/[0.02] rounded-md px-3 py-2.5 min-w-0">
       <PanelHeader
         title="Queue Progress"
-        badge={stats.active ? `${stats.done}/${stats.total}` : 'idle'}
+        badge={stats.active ? `${stats.remaining} queued` : 'idle'}
       />
       {!stats.active ? (
         <div className="text-xs text-zinc-500 italic py-1">Queue is empty.</div>
       ) : (
-        <>
-          <div
-            className="h-2 w-full bg-white/[0.04] rounded-sm overflow-hidden"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(stats.fraction * 100)}
-            aria-label="ComfyUI queue progress"
-          >
-            <div
-              className="h-full bg-[#76B900] transition-[width] duration-500 ease-out"
-              style={{ width: widthPct }}
-            />
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+              ETA
+            </span>
+            <span
+              className="text-lg font-bold text-zinc-100 font-mono tabular-nums leading-tight"
+              title={
+                stats.lastTaskDurationMs !== null
+                  ? `Last task took ${formatEta(stats.lastTaskDurationMs)} × ${stats.remaining} queued`
+                  : 'Waiting for two completions to estimate task duration'
+              }
+            >
+              {stats.etaMs !== null ? formatEta(stats.etaMs) : '—'}
+            </span>
           </div>
-          <div className="flex items-baseline justify-between mt-2 gap-2">
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
-                Complete
-              </span>
-              <span className="text-lg font-bold text-zinc-100 font-mono tabular-nums leading-tight">
-                {percentLabel}
-              </span>
-            </div>
-            <div className="flex flex-col items-end min-w-0">
-              <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
-                ETA
-              </span>
-              <span
-                className="text-lg font-bold text-zinc-100 font-mono tabular-nums leading-tight"
-                title={
-                  stats.avgMsPerItem !== null
-                    ? `~${(stats.avgMsPerItem / 1000).toFixed(1)}s/job`
-                    : 'Waiting for first completion'
-                }
-              >
-                {stats.etaMs !== null ? formatEta(stats.etaMs) : '—'}
-              </span>
-            </div>
+          <div className="flex flex-col items-end min-w-0">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+              Done at
+            </span>
+            <span className="text-lg font-bold text-zinc-100 font-mono tabular-nums leading-tight">
+              {stats.etaCompleteAtMs !== null ? formatLocalTime(stats.etaCompleteAtMs) : '—'}
+            </span>
           </div>
-        </>
+        </div>
       )}
     </div>
   )
@@ -356,8 +298,7 @@ export function ComfyUICard({ state }: ComfyUICardProps) {
     upstreamHost,
   } = state
   const nowMs = useNow()
-  const batch = useQueueBatch(queueRemaining, state.totalCompleted)
-  const queueStats = computeQueueStats(state, batch, nowMs)
+  const queueStats = computeQueueStats(state, nowMs)
 
   // Disconnected fallback — the dashboard server tried to reach ComfyUI
   // and got nothing back. CORS isn't an issue (the server proxies the

@@ -5,9 +5,10 @@ import {
   computeQueueStats,
   formatAgo,
   formatEta,
-  runningPromptFraction,
+  formatLocalTime,
+  lastTaskDurationMs,
 } from '../components/engines/ComfyUICard'
-import type { ComfyUIState } from '../types/comfyui'
+import type { ComfyHistoryEntry, ComfyUIState } from '../types/comfyui'
 
 const BASE: ComfyUIState = {
   connectionStatus: 'connected',
@@ -37,44 +38,34 @@ describe('formatAgo', () => {
   })
 })
 
-describe('runningPromptFraction', () => {
-  it('returns 0 for null or empty progress', () => {
-    expect(runningPromptFraction(null)).toBe(0)
-    expect(
-      runningPromptFraction({
-        promptId: 'x',
-        nodeId: null,
-        value: 0,
-        max: 0,
-        executedNodes: 0,
-        totalNodes: 0,
-      }),
-    ).toBe(0)
+describe('lastTaskDurationMs', () => {
+  const entry = (completedAtMs: number, n: number = 0): ComfyHistoryEntry => ({
+    promptId: `h${n}`,
+    number: n,
+    status: 'success',
+    completed: true,
+    outputImageCount: 1,
+    nodeCount: 4,
+    completedAtMs,
   })
-  it('combines node-level and step-level progress', () => {
-    // 2 of 4 nodes done plus 5/10 through the 3rd: (2 + 0.5)/4 = 0.625
-    expect(
-      runningPromptFraction({
-        promptId: 'x',
-        nodeId: '3',
-        value: 5,
-        max: 10,
-        executedNodes: 2,
-        totalNodes: 4,
-      }),
-    ).toBeCloseTo(0.625, 3)
+  it('returns null when fewer than two entries are present', () => {
+    expect(lastTaskDurationMs([])).toBeNull()
+    expect(lastTaskDurationMs([entry(1_000)])).toBeNull()
   })
-  it('clamps over-100% workflows to 1.0', () => {
-    expect(
-      runningPromptFraction({
-        promptId: 'x',
-        nodeId: '9',
-        value: 0,
-        max: 1,
-        executedNodes: 9,
-        totalNodes: 4,
-      }),
-    ).toBe(1)
+  it('returns the gap between the two newest completions', () => {
+    expect(lastTaskDurationMs([entry(2_000, 2), entry(500, 1)])).toBe(1_500)
+  })
+  it('returns null when the gap is non-positive (out-of-order history)', () => {
+    expect(lastTaskDurationMs([entry(500, 2), entry(2_000, 1)])).toBeNull()
+  })
+})
+
+describe('formatLocalTime', () => {
+  it('renders a wall-clock timestamp without throwing', () => {
+    // toLocaleTimeString output is locale-dependent; just assert non-empty.
+    const s = formatLocalTime(Date.UTC(2026, 4, 13, 15, 42))
+    expect(typeof s).toBe('string')
+    expect(s.length).toBeGreaterThan(0)
   })
 })
 
@@ -197,75 +188,116 @@ describe('ComfyUICard', () => {
     expect(screen.getByText(/\+1 err/)).toBeDefined()
   })
 
-  it('renders the queue-progress panel with percent, ETA, and a progressbar', () => {
-    const startedAt = 1_000_000
-    const now = startedAt + 60_000 // 60s into a batch
+  it('projects ETA from last-task duration × queued items', () => {
+    const now = 2_000_000
+    // Two completed tasks 30 s apart → last-task duration = 30 s.
+    const history: ComfyHistoryEntry[] = [
+      {
+        promptId: 'h0',
+        number: 11,
+        status: 'success',
+        completed: true,
+        outputImageCount: 1,
+        nodeCount: 5,
+        completedAtMs: now - 10_000,
+      },
+      {
+        promptId: 'h1',
+        number: 10,
+        status: 'success',
+        completed: true,
+        outputImageCount: 1,
+        nodeCount: 5,
+        completedAtMs: now - 40_000,
+      },
+    ]
     const state: ComfyUIState = {
       ...BASE,
-      queueRemaining: 2,
-      totalCompleted: 2, // two completions landed since batch start
-      running: [
+      queueRemaining: 4,
+      totalCompleted: 2,
+      history,
+    }
+    const stats = computeQueueStats(state, now)
+    expect(stats.active).toBe(true)
+    expect(stats.remaining).toBe(4)
+    expect(stats.lastTaskDurationMs).toBe(30_000)
+    // 30 s × 4 queued = 120 s
+    expect(stats.etaMs).toBe(120_000)
+    expect(stats.etaCompleteAtMs).toBe(now + 120_000)
+  })
+
+  it('treats an empty queue as inactive', () => {
+    const stats = computeQueueStats(BASE, 1_000_000)
+    expect(stats.active).toBe(false)
+    expect(stats.etaMs).toBeNull()
+    expect(stats.etaCompleteAtMs).toBeNull()
+    expect(stats.lastTaskDurationMs).toBeNull()
+  })
+
+  it('returns null ETA when history has fewer than two completions', () => {
+    const now = 1_005_000
+    const state: ComfyUIState = {
+      ...BASE,
+      queueRemaining: 3,
+      history: [
         {
-          number: 12,
-          promptId: 'r1',
-          nodeCount: 5,
-          outputNodeCount: 1,
-          primaryNodeTypes: ['KSampler'],
-          modelName: null,
-          queuedAtMs: now - 5000,
-          startedAtMs: now - 2000,
+          promptId: 'h0',
+          number: 1,
+          status: 'success',
+          completed: true,
+          outputImageCount: 1,
+          nodeCount: 4,
+          completedAtMs: now - 5000,
         },
       ],
-      progress: {
-        promptId: 'r1',
-        nodeId: '3',
-        value: 5,
-        max: 10,
-        executedNodes: 2,
-        totalNodes: 5,
-      },
     }
-    const stats = computeQueueStats(
-      state,
-      { startedAtMs: startedAt, completedAtStart: 0 },
-      now,
-    )
+    const stats = computeQueueStats(state, now)
     expect(stats.active).toBe(true)
-    expect(stats.done).toBe(2)
-    expect(stats.remaining).toBe(2)
-    expect(stats.total).toBe(4)
-    // 2 done + 0.5 in-progress / 4 = 0.625
-    expect(stats.fraction).toBeCloseTo(0.625, 3)
-    expect(stats.avgMsPerItem).toBe(30_000)
-    // (2 - 0.5) * 30s = 45s
-    expect(stats.etaMs).toBe(45_000)
-  })
-
-  it('treats an empty queue as no active batch', () => {
-    const stats = computeQueueStats(BASE, null, 1_000_000)
-    expect(stats.active).toBe(false)
-    expect(stats.fraction).toBe(0)
+    expect(stats.lastTaskDurationMs).toBeNull()
     expect(stats.etaMs).toBeNull()
-    expect(stats.avgMsPerItem).toBeNull()
-  })
-
-  it('returns null ETA before any completion has landed in the batch', () => {
-    const state: ComfyUIState = { ...BASE, queueRemaining: 3, totalCompleted: 0 }
-    const stats = computeQueueStats(
-      state,
-      { startedAtMs: 1_000_000, completedAtStart: 0 },
-      1_005_000,
-    )
-    expect(stats.active).toBe(true)
-    expect(stats.done).toBe(0)
-    expect(stats.etaMs).toBeNull()
-    expect(stats.avgMsPerItem).toBeNull()
+    expect(stats.etaCompleteAtMs).toBeNull()
   })
 
   it('renders the QueueProgress card in the connected layout', () => {
     render(<ComfyUICard state={BASE} />)
     expect(screen.getByText('Queue Progress')).toBeDefined()
     expect(screen.getByText('Queue is empty.')).toBeDefined()
+  })
+
+  it('renders the projected completion time in local time when queued', () => {
+    const now = Date.now()
+    const history: ComfyHistoryEntry[] = [
+      {
+        promptId: 'h0',
+        number: 11,
+        status: 'success',
+        completed: true,
+        outputImageCount: 1,
+        nodeCount: 5,
+        completedAtMs: now - 10_000,
+      },
+      {
+        promptId: 'h1',
+        number: 10,
+        status: 'success',
+        completed: true,
+        outputImageCount: 1,
+        nodeCount: 5,
+        completedAtMs: now - 70_000,
+      },
+    ]
+    const state: ComfyUIState = {
+      ...BASE,
+      queueRemaining: 2,
+      history,
+    }
+    render(<ComfyUICard state={state} />)
+    expect(screen.getByText('ETA')).toBeDefined()
+    expect(screen.getByText('Done at')).toBeDefined()
+    // Last-task duration of 60s × 2 queued = 2m
+    expect(screen.getByText('2m')).toBeDefined()
+    // 2 queued badge appears in the panel header
+    expect(screen.getByText('2 queued')).toBeDefined()
   })
 
   it('shows queue depth and workflow count in the status panel', () => {
