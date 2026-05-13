@@ -183,16 +183,18 @@ export const TimeSeriesChart = React.memo(function TimeSeriesChart({
 
   return (
     <div className={cn(fillHeight && 'flex flex-col h-full min-h-0', className)}>
-      {/* Reserve a fixed header band so charts with wrapping multi-series
-          legends (Prefill / Decode / Latency) line up with single-title
-          charts (KV / E2E) along the bottom. Legend always sits on its own
-          line below the title for consistent layout across charts. */}
-      <div className="flex flex-col gap-1 mb-1 min-h-[2.25rem]">
-        {title && (
+      {/* Header band: title on the left, legend on the right. Reserved
+          min-height keeps charts with wrapping multi-series legends
+          (Prefill / Decode / Latency) aligned with single-title charts
+          (KV / E2E) along the bottom even if the legend wraps. */}
+      <div className="flex items-start justify-between gap-3 mb-1 min-h-[1.25rem]">
+        {title ? (
           <h3 className="text-xs font-medium text-zinc-500">{title}</h3>
+        ) : (
+          <span />
         )}
         {isMulti && (
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center justify-end gap-3 flex-wrap">
             {series.map((s, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <span
